@@ -1,4 +1,4 @@
-// Package skeleton is an Arandu module: one entity, one policy that decides
+// Package tags is an Arandu module: one entity, one policy that decides
 // about it, one service that owns its Model-first data path, and the routes that
 // reach them.
 //
@@ -15,7 +15,7 @@
 // An application registers it explicitly. There is no service provider, no
 // container and no discovery: the wiring is three lines somebody wrote, and
 // reading them is how they learn what the application is made of.
-package skeleton
+package tags
 
 import (
 	"context"
@@ -48,7 +48,7 @@ import (
 // give resources back at shutdown.
 type Module struct {
 	cfg      Config
-	svc      *SkeletonService
+	svc      *TagService
 	sessions *security.SessionStore
 }
 
@@ -74,15 +74,15 @@ func New(cfg Config, db *data.DB, sessions *security.SessionStore) (*Module, err
 		return nil, err
 	}
 	if db == nil {
-		return nil, errors.New("skeleton: New needs a database handle: this package owns a table, and there is no in-memory mode that would let it start without one")
+		return nil, errors.New("tags: New needs a database handle: this package owns a table, and there is no in-memory mode that would let it start without one")
 	}
 	if sessions == nil {
-		return nil, errors.New("skeleton: New needs a session store: it is where the subject comes from, and a request with no subject cannot be authorized")
+		return nil, errors.New("tags: New needs a session store: it is where the subject comes from, and a request with no subject cannot be authorized")
 	}
 	cfg = cfg.withDefaults()
 	return &Module{
 		cfg:      cfg,
-		svc:      NewSkeletonService(db),
+		svc:      NewTagService(db),
 		sessions: sessions,
 	}, nil
 }
@@ -91,7 +91,7 @@ func New(cfg Config, db *data.DB, sessions *security.SessionStore) (*Module, err
 //
 // It is what `aru route:list` groups by and what the route names are prefixed with,
 // so changing it changes addresses that other code has already written down.
-func (m *Module) Name() string { return "skeleton" }
+func (m *Module) Name() string { return "tags" }
 
 // Routes registers the module's routes under the configured prefix.
 //
@@ -99,9 +99,9 @@ func (m *Module) Name() string { return "skeleton" }
 // second time somewhere else -- two spellings of one address disagree, and the
 // failure when they do is a link to a 404.
 func (m *Module) Routes(r *fhttp.Router) {
-	r.Action(stdhttp.MethodGet, m.cfg.Prefix, m.index).Name("skeleton.index")
-	r.Action(stdhttp.MethodGet, m.cfg.Prefix+"/{id}", m.show).Name("skeleton.show")
-	r.Action(stdhttp.MethodPost, m.cfg.Prefix, m.store).Name("skeleton.store")
+	r.Action(stdhttp.MethodGet, m.cfg.Prefix, m.index).Name("tags.index")
+	r.Action(stdhttp.MethodGet, m.cfg.Prefix+"/{id}", m.show).Name("tags.show")
+	r.Action(stdhttp.MethodPost, m.cfg.Prefix, m.store).Name("tags.store")
 }
 
 // PublishCommand is what an application runs to take ownership of the views
@@ -139,7 +139,7 @@ func (m *Module) Boot(context.Context) error {
 		}
 	}
 	if len(stray) > 0 {
-		return fmt.Errorf("skeleton: %s would be published outside %s, where it lands on a file the application wrote",
+		return fmt.Errorf("tags: %s would be published outside %s, where it lands on a file the application wrote",
 			strings.Join(stray, ", "), prefix)
 	}
 
@@ -162,7 +162,7 @@ func (m *Module) Boot(context.Context) error {
 		for _, pkg := range ViewPackages() {
 			imports = append(imports, "<module path>/"+pkg)
 		}
-		return fmt.Errorf("skeleton: no view is registered as %s. Run `%s`, then `aru view:build`, then import %s in bootstrap/app.go",
+		return fmt.Errorf("tags: no view is registered as %s. Run `%s`, then `aru view:build`, then import %s in bootstrap/app.go",
 			strings.Join(missing, ", "), PublishCommand, strings.Join(imports, ", "))
 	}
 	return nil
@@ -273,22 +273,22 @@ func (m *Module) answer(ctx *fhttp.Context, err error) error {
 // They are returned in the order their names sort in, which is the order they
 // apply in: the name carries the order, and nothing else decides it.
 func (m *Module) Migrations() []foundation.Migration {
-	return []foundation.Migration{createSkeletons{}}
+	return []foundation.Migration{createTags{}}
 }
 
 // The migration is reversible, and the assertion is here rather than discovered
 // at rollback: the migrator tests for Down with a type assertion, so a Down
 // with the wrong signature would leave a rollback that silently does nothing.
-var _ migrations.ReversibleMigration = createSkeletons{}
+var _ migrations.ReversibleMigration = createTags{}
 
-// createSkeletons is the table this module owns, and the index its listing
+// createTags is the table this module owns, and the index its listing
 // reads by.
-type createSkeletons struct{ migrations.BaseMigration }
+type createTags struct{ migrations.BaseMigration }
 
 // GetName is the migration's identity, and it carries the order. It is fixed
 // once the package is published: changing what an applied name means leaves the
 // change missing everywhere it already ran, and nothing says so.
-func (createSkeletons) GetName() string { return "20260823_0001_create_skeletons" }
+func (createTags) GetName() string { return "20260823_0001_create_tags" }
 
 // Up creates the table and the index the keyset pagination scans.
 //
@@ -301,8 +301,8 @@ func (createSkeletons) GetName() string { return "20260823_0001_create_skeletons
 // remembered to.
 //
 // The timestamp has no database default: the value comes from Go.
-func (createSkeletons) Up(ctx context.Context, conn migrations.Connection) error {
-	return conn.Schema().Create(ctx, "skeletons", func(table *schema.Blueprint) {
+func (createTags) Up(ctx context.Context, conn migrations.Connection) error {
+	return conn.Schema().Create(ctx, "tags", func(table *schema.Blueprint) {
 		table.String("id").Primary()
 		table.String("tenant_id")
 		table.String("name")
@@ -310,11 +310,11 @@ func (createSkeletons) Up(ctx context.Context, conn migrations.Connection) error
 
 		// The index matches the ORDER BY of the listing, tenant first. Without
 		// it every page is a scan of every customer's rows.
-		table.Index([]string{"tenant_id", "created_at", "id"}, "skeletons_tenant_created_idx")
+		table.Index([]string{"tenant_id", "created_at", "id"}, "tags_tenant_created_idx")
 	})
 }
 
 // Down drops the table, which takes its index with it.
-func (createSkeletons) Down(ctx context.Context, conn migrations.Connection) error {
-	return conn.Schema().DropIfExists(ctx, "skeletons")
+func (createTags) Down(ctx context.Context, conn migrations.Connection) error {
+	return conn.Schema().DropIfExists(ctx, "tags")
 }

@@ -1,5 +1,5 @@
 ---
-name: skeleton-release
+name: tags-release
 description: Get this Arandu package green, declared and published. Use when the request is to "run the gates", "check it builds", "the tests fail", "go build says the directory prefix does not contain modules listed in go.work", "aru doctor says this is not an Arandu project", "update arandu.mod.toml", "add a dependency", "bump the framework", "tag a release", "publish it", "go get cannot find the module", "write the changelog", or before opening a pull request. Covers the four gates and why each filter is there, what the manifest declares and who checks it, the immutability of a published module version, and what breaks somebody else's build.
 license: MIT
 ---
@@ -55,7 +55,7 @@ inside and never loads a dependency, so the manifest of an installed package is
 opened by nothing but that package's own suite.
 
 ```toml
-name = ":author_username/:module_slug"
+name = "hyz-is/tags"
 framework = ">= 0.46"
 profiles = ["conventional", "performance"]
 
@@ -121,12 +121,6 @@ Before tagging:
 - `arandu.mod.toml` matches the code;
 - `CHANGELOG.md` has the entry, under the version, in the Keep a Changelog
   sections — `Added`, `Changed`, `Fixed`, `Removed`.
-<!-- configure:template-start -->
-- nothing in the tree still carries a template placeholder, and `configure.go`
-  has deleted itself. The CI job named `configure` asserts both on a clean
-  clone, so the check has already run — but it runs on a clone, not on this
-  working tree.
-<!-- configure:template-end -->
 
 While the version starts with `v0.`, breaking is allowed — freezing a shape this
 early is worse. Breaking *quietly* is not. A field that stops existing is a

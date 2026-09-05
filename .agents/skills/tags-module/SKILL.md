@@ -1,5 +1,5 @@
 ---
-name: skeleton-module
+name: tags-module
 description: Change what this Arandu package registers — its routes, handlers, configuration, response shape or schema. Use when the request is to "add a route", "add an endpoint", "add a handler", "add a config option", "change the prefix", "add a field to the response", "add a column", "write a migration", "return the tenant id too", "add a background job to the package", "make it run something at boot", or when a change touches module.go, config.go or model.go. Covers foundation.Module and the five optional interfaces beside it, why handlers are thin, the migration name that carries the order, and what Resource is for.
 license: MIT
 ---
@@ -53,7 +53,7 @@ application's own tree and never opens an installed package.
 **1. Register it in `Routes`, with a name.**
 
 ```go
-	r.Action(stdhttp.MethodDelete, m.cfg.Prefix+"/{id}", m.destroy).Name("skeleton.destroy")
+	r.Action(stdhttp.MethodDelete, m.cfg.Prefix+"/{id}", m.destroy).Name("tags.destroy")
 ```
 
 The name is what a URL is built from. Two spellings of one address disagree, and
@@ -80,8 +80,8 @@ what it is handed, so a nil resource panics inside the framework rather than
 answering 204.
 
 No rule and no Model construction lives in a handler. A handler that held the
-database or called `Skeletons` would bypass the only place the Policy is
-guaranteed to run. Read `skeleton-policy` before writing the Service method.
+database or called `Tags` would bypass the only place the Policy is
+guaranteed to run. Read `tags-policy` before writing the Service method.
 
 **3. Let `answer` translate the refusal.** It knows three: `security.ErrForbidden`
 becomes 403, `ErrNotFound` becomes 404, and a `validation.Errors` becomes 422
@@ -109,13 +109,13 @@ request.
 
 ## Changing the Model
 
-`Skeleton` embeds `model.Model[Skeleton]`, and `Skeletons(db)` is the one
+`Tag` embeds `model.Model[Tag]`, and `Tags(db)` is the one
 configured entry point for the table. Keep the application-generated key
 settings and tenant default visible there:
 
 ```go
-func Skeletons(db *data.DB) *model.Model[Skeleton] {
-	m := model.NewModel[Skeleton]("skeletons", db, db.GetQueryGrammar(), db.GetPostProcessor())
+func Tags(db *data.DB) *model.Model[Tag] {
+	m := model.NewModel[Tag]("tags", db, db.GetQueryGrammar(), db.GetPostProcessor())
 	m.KeyType = "string"
 	m.Incrementing = false
 	return m
@@ -166,7 +166,7 @@ if the field can make `New` fail.
 
 `Resource` and `Collection` in `model.go` are declared snapshots, not direct
 encoding of the entity. This also defines the safe copy boundary: Model-backed
-Service results stay as `*Skeleton`/`[]*Skeleton`, because copying an embedded
+Service results stay as `*Tag`/`[]*Tag`, because copying an embedded
 Model preserves a back-pointer to the original allocation. A response snapshot
 reads only the explicit fields and cannot be saved.
 
@@ -202,7 +202,7 @@ Append it to the slice `Migrations()` returns, and give it a name that sorts
 after the last one:
 
 ```go
-func (createSkeletons) GetName() string { return "20260823_0001_create_skeletons" }
+func (createTags) GetName() string { return "20260823_0001_create_tags" }
 ```
 
 **The name carries the order and nothing else does.** `TestTheModuleDeclaresItsSchema`

@@ -13,7 +13,7 @@ import (
 	"github.com/arandu-io/framework/security"
 	"github.com/arandu-io/hesape/database/migrations"
 
-	skeleton "github.com/arandu-io/package-skeleton"
+	tags "github.com/hyz-is/arandu-tags"
 )
 
 // These tests drive the module the way an application does: build it, register
@@ -37,12 +37,12 @@ const appKey = "0123456789abcdef0123456789abcdef"
 const reservedPrefix = "/_arandu"
 
 // mount builds the module and returns a router with its routes registered.
-func mount(t *testing.T, cfg skeleton.Config) *fhttp.Router {
+func mount(t *testing.T, cfg tags.Config) *fhttp.Router {
 	t.Helper()
 
 	sessions := security.NewSessionStore([]byte(appKey), time.Hour, false, security.NewMemoryBackend())
 
-	module, err := skeleton.New(cfg, data.Wrap(nil, data.DialectSQLite), sessions)
+	module, err := tags.New(cfg, data.Wrap(nil, data.DialectSQLite), sessions)
 	if err != nil {
 		t.Fatalf("building the module: %v", err)
 	}
@@ -68,16 +68,16 @@ func answer(t *testing.T, router *fhttp.Router, method, target string, body stri
 func TestAVisitorWithNoSessionReachesNothing(t *testing.T) {
 	t.Parallel()
 
-	router := mount(t, skeleton.Config{Tenant: "acme"})
+	router := mount(t, tags.Config{Tenant: "acme"})
 
 	for _, request := range []struct {
 		method string
 		target string
 		body   string
 	}{
-		{http.MethodGet, skeleton.DefaultPrefix, ""},
-		{http.MethodGet, skeleton.DefaultPrefix + "/record-1", ""},
-		{http.MethodPost, skeleton.DefaultPrefix, "name=one"},
+		{http.MethodGet, tags.DefaultPrefix, ""},
+		{http.MethodGet, tags.DefaultPrefix + "/record-1", ""},
+		{http.MethodPost, tags.DefaultPrefix, "name=one"},
 	} {
 		rec := answer(t, router, request.method, request.target, request.body)
 		if rec.Code != http.StatusForbidden {
@@ -89,12 +89,12 @@ func TestAVisitorWithNoSessionReachesNothing(t *testing.T) {
 func TestARejectedInputIsAnsweredBeforeTheDatabase(t *testing.T) {
 	t.Parallel()
 
-	router := mount(t, skeleton.Config{Tenant: "acme"})
+	router := mount(t, tags.Config{Tenant: "acme"})
 
 	// The input is validated before anything is authorized, so this is the one
 	// refusal that arrives as 422 rather than 403 -- and it still never reaches
 	// a statement.
-	rec := answer(t, router, http.MethodPost, skeleton.DefaultPrefix, "name=")
+	rec := answer(t, router, http.MethodPost, tags.DefaultPrefix, "name=")
 	if rec.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("an empty name answered %d, want %d", rec.Code, http.StatusUnprocessableEntity)
 	}
@@ -103,11 +103,11 @@ func TestARejectedInputIsAnsweredBeforeTheDatabase(t *testing.T) {
 func TestTheModuleRegistersItsRoutesUnderItsPrefix(t *testing.T) {
 	t.Parallel()
 
-	router := mount(t, skeleton.Config{Tenant: "acme", Prefix: "/widgets"})
+	router := mount(t, tags.Config{Tenant: "acme", Prefix: "/widgets"})
 
 	got := make([]string, 0, 3)
 	for _, route := range router.Routes() {
-		if route.Module != "skeleton" {
+		if route.Module != "tags" {
 			t.Errorf("the route %s %s is not tagged with the module name: %q", route.Method, route.Pattern, route.Module)
 		}
 		got = append(got, route.Method+" "+route.Pattern)
@@ -137,7 +137,7 @@ func TestTheModuleRegistersItsRoutesUnderItsPrefix(t *testing.T) {
 func TestNoRouteLandsInTheFrameworkNamespace(t *testing.T) {
 	t.Parallel()
 
-	for _, cfg := range []skeleton.Config{
+	for _, cfg := range []tags.Config{
 		{Tenant: "acme"},
 		{Tenant: "acme", Prefix: "/widgets"},
 	} {
@@ -162,18 +162,18 @@ func TestNewRefusesAWiringThatCannotWork(t *testing.T) {
 
 	sessions := security.NewSessionStore([]byte(appKey), time.Hour, false, security.NewMemoryBackend())
 	handle := data.Wrap(nil, data.DialectSQLite)
-	valid := skeleton.Config{Tenant: "acme"}
+	valid := tags.Config{Tenant: "acme"}
 
-	if _, err := skeleton.New(skeleton.Config{}, handle, sessions); err == nil {
+	if _, err := tags.New(tags.Config{}, handle, sessions); err == nil {
 		t.Error("a configuration with no tenant was accepted")
 	}
-	if _, err := skeleton.New(valid, nil, sessions); err == nil {
+	if _, err := tags.New(valid, nil, sessions); err == nil {
 		t.Error("a nil database handle was accepted")
 	}
-	if _, err := skeleton.New(valid, handle, nil); err == nil {
+	if _, err := tags.New(valid, handle, nil); err == nil {
 		t.Error("a nil session store was accepted")
 	}
-	if _, err := skeleton.New(valid, handle, sessions); err != nil {
+	if _, err := tags.New(valid, handle, sessions); err != nil {
 		t.Fatalf("a valid wiring was refused: %v", err)
 	}
 }
@@ -185,7 +185,7 @@ func TestNewRefusesARoutePrefixThatCannotBeRegistered(t *testing.T) {
 	handle := data.Wrap(nil, data.DialectSQLite)
 
 	for _, prefix := range []string{"/widgets{", "/widgets/{id}"} {
-		if _, err := skeleton.New(skeleton.Config{Tenant: "acme", Prefix: prefix}, handle, sessions); err == nil {
+		if _, err := tags.New(tags.Config{Tenant: "acme", Prefix: prefix}, handle, sessions); err == nil {
 			t.Errorf("New accepted route prefix %q, which would panic during route registration", prefix)
 		}
 	}
@@ -195,7 +195,7 @@ func TestTheModuleDeclaresItsSchema(t *testing.T) {
 	t.Parallel()
 
 	sessions := security.NewSessionStore([]byte(appKey), time.Hour, false, security.NewMemoryBackend())
-	module, err := skeleton.New(skeleton.Config{Tenant: "acme"}, data.Wrap(nil, data.DialectSQLite), sessions)
+	module, err := tags.New(tags.Config{Tenant: "acme"}, data.Wrap(nil, data.DialectSQLite), sessions)
 	if err != nil {
 		t.Fatalf("building the module: %v", err)
 	}

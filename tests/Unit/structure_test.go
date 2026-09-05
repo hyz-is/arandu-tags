@@ -23,7 +23,7 @@ func TestTheApplicationIntegrationHasOneCompositionFile(t *testing.T) {
 	root := packageRoot(t)
 	guides := []string{
 		"README.md",
-		".agents/skills/skeleton-package/SKILL.md",
+		".agents/skills/tags-package/SKILL.md",
 	}
 	bootstrapFile := regexp.MustCompile(`bootstrap/[A-Za-z0-9_.-]+\.go`)
 
@@ -34,7 +34,7 @@ func TestTheApplicationIntegrationHasOneCompositionFile(t *testing.T) {
 		}
 
 		text := string(body)
-		for _, required := range []string{"bootstrap/app.go", ":module_slug.New(", "k.Register"} {
+		for _, required := range []string{"bootstrap/app.go", "tags.New(", "k.Register"} {
 			if !strings.Contains(text, required) {
 				t.Errorf("%s no longer teaches the explicit composition step %q", guide, required)
 			}
@@ -95,18 +95,18 @@ func TestThePackageUsesTheModelFirstDataPath(t *testing.T) {
 	wants := map[string][]string{
 		"model.go": {
 			`"github.com/arandu-io/hesape/database/model"`,
-			"model.Model[Skeleton]",
-			"func Skeletons(db *data.DB) *model.Model[Skeleton]",
+			"model.Model[Tag]",
+			"func Tags(db *data.DB) *model.Model[Tag]",
 		},
 		"service.go": {
 			"db     *data.DB",
-			"func NewSkeletonService(db *data.DB) *SkeletonService",
-			"Skeletons(s.db)",
-			") (*Skeleton, error)",
-			") ([]*Skeleton, error)",
+			"func NewTagService(db *data.DB) *TagService",
+			"Tags(s.db)",
+			") (*Tag, error)",
+			") ([]*Tag, error)",
 		},
 		"module.go": {
-			"NewSkeletonService(db)",
+			"NewTagService(db)",
 		},
 	}
 	for path, required := range wants {
@@ -129,14 +129,14 @@ func TestTheGuidesTeachTheModelFirstBoundary(t *testing.T) {
 
 	root := packageRoot(t)
 	guides := map[string][]string{
-		"AGENTS.md":                {"Skeletons(db)", "security.Authorize"},
-		"README.md":                {"Skeletons(db)", "Model terminal"},
-		"CONTRIBUTING.md":          {"Skeletons(db)", "authorizes before reaching the Model"},
-		"SECURITY.md":              {"Model terminal", "data.Tenant(g)"},
-		".agents/skills/README.md": {"CRUD Repository", "configured Model"},
-		".agents/skills/skeleton-module/SKILL.md":  {"func Skeletons", "security.Authorize"},
-		".agents/skills/skeleton-policy/SKILL.md":  {"security.Authorize", "Skeletons("},
-		".agents/skills/skeleton-release/SKILL.md": {"Model-first", "configured copy"},
+		"AGENTS.md":                            {"Tags(db)", "security.Authorize"},
+		"README.md":                            {"Tags(db)", "Model terminal"},
+		"CONTRIBUTING.md":                      {"Tags(db)", "authorizes before reaching the Model"},
+		"SECURITY.md":                          {"Model terminal", "data.Tenant(g)"},
+		".agents/skills/README.md":             {"CRUD Repository", "configured Model"},
+		".agents/skills/tags-module/SKILL.md":  {"func Tags", "security.Authorize"},
+		".agents/skills/tags-policy/SKILL.md":  {"security.Authorize", "Tags("},
+		".agents/skills/tags-release/SKILL.md": {"Model-first", "configured copy"},
 	}
 	for path, required := range guides {
 		body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
@@ -149,7 +149,7 @@ func TestTheGuidesTeachTheModelFirstBoundary(t *testing.T) {
 				t.Errorf("%s does not teach %q", path, want)
 			}
 		}
-		for _, stale := range []string{"SkeletonRepository", "NewSkeletonRepository", "repository.go  data access"} {
+		for _, stale := range []string{"TagRepository", "NewTagRepository", "repository.go  data access"} {
 			if strings.Contains(text, stale) {
 				t.Errorf("%s still teaches the retired CRUD surface %q", path, stale)
 			}

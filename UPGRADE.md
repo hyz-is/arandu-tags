@@ -10,8 +10,8 @@ the contract or carries the command that writes the files. Upgrade Framework to
 
 ```sh
 # Before.
-go run :module_path/publish@latest
-go run :module_path/publish@latest --force
+go run github.com/hyz-is/arandu-tags/publish@latest
+go run github.com/hyz-is/arandu-tags/publish@latest --force
 
 # After.
 aru vendor:publish --tag=view
@@ -81,18 +81,18 @@ Construct the Service with the application database handle:
 
 ```go
 // Before.
-repository := NewSkeletonRepository(db)
-service := NewSkeletonService(repository)
+repository := NewTagRepository(db)
+service := NewTagService(repository)
 
 // After.
-service := NewSkeletonService(db)
+service := NewTagService(db)
 ```
 
-`SkeletonRepository` and `NewSkeletonRepository` were removed. The removed
-generic CRUD methods are `(*SkeletonRepository).Create`,
-`(*SkeletonRepository).Delete`, `(*SkeletonRepository).Find`,
-`(*SkeletonRepository).List`, and `(*SkeletonRepository).Update`. Use
-`Skeletons(db)` after authorization for generic CRUD. Add a Repository only for
+`TagRepository` and `NewTagRepository` were removed. The removed
+generic CRUD methods are `(*TagRepository).Create`,
+`(*TagRepository).Delete`, `(*TagRepository).Find`,
+`(*TagRepository).List`, and `(*TagRepository).Update`. Use
+`Tags(db)` after authorization for generic CRUD. Add a Repository only for
 a specialized query, report, projection, read model, export, or external
 storage boundary.
 
@@ -100,21 +100,21 @@ storage boundary.
 
 The Service now returns the entities owned by the configured Model:
 
-- `(*SkeletonService).Create` changed from `(Skeleton, error)` to
-  `(*Skeleton, error)`;
-- `(*SkeletonService).Find` changed from `(Skeleton, error)` to
-  `(*Skeleton, error)`;
-- `(*SkeletonService).List` changed from `([]Skeleton, error)` to
-  `([]*Skeleton, error)`;
-- `NewSkeletonService` changed from accepting `*SkeletonRepository` to
+- `(*TagService).Create` changed from `(Tag, error)` to
+  `(*Tag, error)`;
+- `(*TagService).Find` changed from `(Tag, error)` to
+  `(*Tag, error)`;
+- `(*TagService).List` changed from `([]Tag, error)` to
+  `([]*Tag, error)`;
+- `NewTagService` changed from accepting `*TagRepository` to
   accepting `*data.DB`.
 
 Keep those pointers intact until converting them to `Resource` or `Collection`.
 Copying an entity with an embedded Model can leave its internal entity pointer
 attached to the original allocation.
 
-`Skeleton`: old is comparable; new is not because it embeds
-`model.Model[Skeleton]`. Do not use the entity as a map key or compare it with
+`Tag`: old is comparable; new is not because it embeds
+`model.Model[Tag]`. Do not use the entity as a map key or compare it with
 `==`; compare stable fields such as `ID` instead.
 
 ### Contracts that did not move

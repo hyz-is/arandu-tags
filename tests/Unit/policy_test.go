@@ -10,7 +10,7 @@ import (
 	"github.com/arandu-io/framework/security"
 	"github.com/arandu-io/hesape/database/model"
 
-	skeleton "github.com/arandu-io/package-skeleton"
+	tags "github.com/hyz-is/arandu-tags"
 )
 
 // The four properties this package exists to keep are checked here, and they
@@ -30,11 +30,11 @@ import (
 // everyAction is the whole set the policy answers about. A test that listed
 // four of five would pass while the fifth was open.
 var everyAction = []security.Action{
-	skeleton.SkeletonView,
-	skeleton.SkeletonList,
-	skeleton.SkeletonCreate,
-	skeleton.SkeletonUpdate,
-	skeleton.SkeletonDelete,
+	tags.TagView,
+	tags.TagList,
+	tags.TagCreate,
+	tags.TagUpdate,
+	tags.TagDelete,
 }
 
 // administrator is the most privileged subject an application can produce. It
@@ -51,8 +51,8 @@ func TestThePolicyDeniesEveryActionByDefault(t *testing.T) {
 		t.Run(string(action), func(t *testing.T) {
 			t.Parallel()
 
-			_, err := security.Authorize(context.Background(), skeleton.SkeletonPolicy{},
-				administrator(), action, skeleton.Skeleton{})
+			_, err := security.Authorize(context.Background(), tags.TagPolicy{},
+				administrator(), action, tags.Tag{})
 			if !errors.Is(err, security.ErrForbidden) {
 				t.Fatalf("an unopened policy allowed %s: got %v, want ErrForbidden", action, err)
 			}
@@ -63,10 +63,10 @@ func TestThePolicyDeniesEveryActionByDefault(t *testing.T) {
 func TestThePolicyDeniesARecordOfAnotherTenant(t *testing.T) {
 	t.Parallel()
 
-	other := skeleton.Skeleton{ID: "record-1", TenantID: "globex", Name: "theirs"}
+	other := tags.Tag{ID: "record-1", TenantID: "globex", Name: "theirs"}
 
-	err := skeleton.SkeletonPolicy{}.Can(context.Background(),
-		administrator(), skeleton.SkeletonView, other)
+	err := tags.TagPolicy{}.Can(context.Background(),
+		administrator(), tags.TagView, other)
 	if err == nil {
 		t.Fatal("the policy allowed a record belonging to another tenant")
 	}
@@ -81,8 +81,8 @@ func TestThePolicyDeniesAGuest(t *testing.T) {
 	t.Parallel()
 
 	for _, action := range everyAction {
-		_, err := security.Authorize(context.Background(), skeleton.SkeletonPolicy{},
-			security.Guest("acme"), action, skeleton.Skeleton{})
+		_, err := security.Authorize(context.Background(), tags.TagPolicy{},
+			security.Guest("acme"), action, tags.Tag{})
 		if !errors.Is(err, security.ErrForbidden) {
 			t.Fatalf("a guest was allowed %s: got %v, want ErrForbidden", action, err)
 		}
@@ -95,8 +95,8 @@ func TestAuthorizeRefusesASubjectThatIsNobody(t *testing.T) {
 	// The zero Subject is a session that failed to load, not an anonymous
 	// reader, and it is refused before the policy is consulted. A package that
 	// answered it as a guest would answer a broken session as a visitor.
-	_, err := security.Authorize(context.Background(), skeleton.SkeletonPolicy{},
-		security.Subject{}, skeleton.SkeletonView, skeleton.Skeleton{})
+	_, err := security.Authorize(context.Background(), tags.TagPolicy{},
+		security.Subject{}, tags.TagView, tags.Tag{})
 	if !errors.Is(err, security.ErrForbidden) {
 		t.Fatalf("an empty subject was authorized: got %v, want ErrForbidden", err)
 	}
@@ -112,10 +112,10 @@ func nilHandle() *data.DB { return data.Wrap(nil, data.DialectSQLite) }
 func TestTheServiceRefusesBeforeReachingTheModel(t *testing.T) {
 	t.Parallel()
 
-	// A nil handle makes even construction of Skeletons panic at
+	// A nil handle makes even construction of Tags panic at
 	// GetQueryGrammar. This catches moving the configured Model entry point --
 	// not only its terminal -- ahead of authorization.
-	service := skeleton.NewSkeletonService(nil)
+	service := tags.NewTagService(nil)
 	ctx := context.Background()
 
 	if _, err := service.Find(ctx, administrator(), "record-1"); !errors.Is(err, security.ErrForbidden) {
@@ -124,26 +124,26 @@ func TestTheServiceRefusesBeforeReachingTheModel(t *testing.T) {
 	if _, err := service.List(ctx, administrator(), data.Query{}); !errors.Is(err, security.ErrForbidden) {
 		t.Fatalf("List reached the Model before the policy refusal: %v", err)
 	}
-	if _, err := service.Create(ctx, administrator(), skeleton.CreateRequest{Name: "one"}); !errors.Is(err, security.ErrForbidden) {
+	if _, err := service.Create(ctx, administrator(), tags.CreateRequest{Name: "one"}); !errors.Is(err, security.ErrForbidden) {
 		t.Fatalf("Create reached the Model before the policy refusal: %v", err)
 	}
 }
 
-func TestSkeletonsReturnsAWiredTenantScopedModel(t *testing.T) {
+func TestTagsReturnsAWiredTenantScopedModel(t *testing.T) {
 	t.Parallel()
 
-	rows := skeleton.Skeletons(nilHandle())
-	if rows.GetTable() != "skeletons" {
-		t.Fatalf("Skeletons table = %q, want skeletons", rows.GetTable())
+	rows := tags.Tags(nilHandle())
+	if rows.GetTable() != "tags" {
+		t.Fatalf("Tags table = %q, want tags", rows.GetTable())
 	}
 	if rows.KeyType != "string" || rows.Incrementing {
-		t.Fatalf("Skeletons key is type %q, incrementing %t; want application-generated text", rows.KeyType, rows.Incrementing)
+		t.Fatalf("Tags key is type %q, incrementing %t; want application-generated text", rows.KeyType, rows.Incrementing)
 	}
 	if rows.TenantColumn != "tenant_id" {
-		t.Fatalf("Skeletons tenant column = %q, want tenant_id", rows.TenantColumn)
+		t.Fatalf("Tags tenant column = %q, want tenant_id", rows.TenantColumn)
 	}
 	if model.ModelOf(rows.Entity) != rows {
-		t.Fatal("Skeletons returned an entity whose embedded Model is not wired to it")
+		t.Fatal("Tags returned an entity whose embedded Model is not wired to it")
 	}
 }
 
@@ -152,8 +152,8 @@ func TestASystemGrantWithoutATenantReachesNothing(t *testing.T) {
 
 	// A system grant with no tenant names no customer. The Model refuses it
 	// while preparing the query, before the nil handle can issue a statement.
-	_, err := skeleton.Skeletons(nilHandle()).NewQuery().WhereKey("record-1").First(
-		context.Background(), security.SystemGrant(skeleton.SkeletonView, ""))
+	_, err := tags.Tags(nilHandle()).NewQuery().WhereKey("record-1").First(
+		context.Background(), security.SystemGrant(tags.TagView, ""))
 	if !errors.Is(err, model.ErrNoTenant) {
 		t.Fatalf("a system grant with no tenant returned %v, want ErrNoTenant", err)
 	}
@@ -162,7 +162,7 @@ func TestASystemGrantWithoutATenantReachesNothing(t *testing.T) {
 func TestTheTenantComesFromTheGrant(t *testing.T) {
 	t.Parallel()
 
-	g := security.SystemGrant(skeleton.SkeletonView, "acme")
+	g := security.SystemGrant(tags.TagView, "acme")
 	if got := data.Tenant(g); got != "acme" {
 		t.Fatalf("data.Tenant(g) = %q, want %q", got, "acme")
 	}
@@ -178,13 +178,13 @@ func TestTheTenantComesFromTheGrant(t *testing.T) {
 func TestTheRequestValidatesItsInput(t *testing.T) {
 	t.Parallel()
 
-	if errs := (skeleton.CreateRequest{}).Validate(); !errs.Any() {
+	if errs := (tags.CreateRequest{}).Validate(); !errs.Any() {
 		t.Fatal("an empty request validated")
 	}
-	if errs := (skeleton.CreateRequest{Name: strings.Repeat("a", 121)}).Validate(); !errs.Any() {
+	if errs := (tags.CreateRequest{Name: strings.Repeat("a", 121)}).Validate(); !errs.Any() {
 		t.Fatal("a name past the maximum validated")
 	}
-	if errs := (skeleton.CreateRequest{Name: "one"}).Validate(); errs.Any() {
+	if errs := (tags.CreateRequest{Name: "one"}).Validate(); errs.Any() {
 		t.Fatalf("a valid request was rejected: %v", errs)
 	}
 }
@@ -192,13 +192,13 @@ func TestTheRequestValidatesItsInput(t *testing.T) {
 func TestTheConfigurationRefusesWhatCannotWork(t *testing.T) {
 	t.Parallel()
 
-	for name, cfg := range map[string]skeleton.Config{
+	for name, cfg := range map[string]tags.Config{
 		"no tenant":        {},
 		"tenant with a /":  {Tenant: "acme/reports"},
 		"tenant uppercase": {Tenant: "Acme"},
-		"relative prefix":  {Tenant: "acme", Prefix: "skeleton"},
+		"relative prefix":  {Tenant: "acme", Prefix: "tags"},
 		"page size too big": {Tenant: "acme",
-			PageSize: skeleton.MaxPageSize + 1},
+			PageSize: tags.MaxPageSize + 1},
 		"negative page size": {Tenant: "acme", PageSize: -1},
 	} {
 		if err := cfg.Validate(); err == nil {
@@ -206,7 +206,7 @@ func TestTheConfigurationRefusesWhatCannotWork(t *testing.T) {
 		}
 	}
 
-	if err := (skeleton.Config{Tenant: "acme"}).Validate(); err != nil {
+	if err := (tags.Config{Tenant: "acme"}).Validate(); err != nil {
 		t.Fatalf("a valid configuration was refused: %v", err)
 	}
 }

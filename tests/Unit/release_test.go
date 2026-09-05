@@ -28,7 +28,7 @@ func TestTheManifestFrameworkFloorMatchesGoMod(t *testing.T) {
 func TestTheReleaseSkillUsesTheManifestFrameworkFloor(t *testing.T) {
 	root := packageRoot(t)
 	manifest := readReleaseFile(t, root, "arandu.mod.toml")
-	skill := readReleaseFile(t, root, ".agents/skills/skeleton-release/SKILL.md")
+	skill := readReleaseFile(t, root, ".agents/skills/tags-release/SKILL.md")
 	declared := captureReleaseValue(t, manifest,
 		`(?m)^framework = ">= ([0-9]+\.[0-9]+)"$`,
 		"Framework floor in arandu.mod.toml")
@@ -52,18 +52,18 @@ func TestVersion020NamesEveryModelFirstIncompatibility(t *testing.T) {
 	}
 
 	incompatibilities := []string{
-		"`(*SkeletonService).Create`",
-		"`(*SkeletonService).Find`",
-		"`(*SkeletonService).List`",
-		"`(*SkeletonRepository).Create`",
-		"`(*SkeletonRepository).Delete`",
-		"`(*SkeletonRepository).Find`",
-		"`(*SkeletonRepository).List`",
-		"`(*SkeletonRepository).Update`",
-		"`NewSkeletonRepository`",
-		"`NewSkeletonService`",
-		"`SkeletonRepository`",
-		"`Skeleton`: old is comparable; new is not",
+		"`(*TagService).Create`",
+		"`(*TagService).Find`",
+		"`(*TagService).List`",
+		"`(*TagRepository).Create`",
+		"`(*TagRepository).Delete`",
+		"`(*TagRepository).Find`",
+		"`(*TagRepository).List`",
+		"`(*TagRepository).Update`",
+		"`NewTagRepository`",
+		"`NewTagService`",
+		"`TagRepository`",
+		"`Tag`: old is comparable; new is not",
 	}
 	for _, incompatibility := range incompatibilities {
 		if !strings.Contains(upgrade, incompatibility) {

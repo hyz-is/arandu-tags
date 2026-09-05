@@ -1,6 +1,6 @@
 # Changelog
 
-Everything worth knowing about a release of :package_name is recorded here.
+Everything worth knowing about a release of Arandu Tags is recorded here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 the versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -59,24 +59,24 @@ a release is corrected by another release and never by moving a tag.
 
 ### Added
 
-- `Skeletons(db)` exposes the configured, tenant-scoped Model used by the
+- `Tags(db)` exposes the configured, tenant-scoped Model used by the
   Service after authorization.
 
 ### Changed
 
 - The minimum Framework version is now `v0.41.0`, with Hesape `v0.19.1`.
-- `NewSkeletonService` now accepts `*data.DB` instead of
-  `*SkeletonRepository`.
-- `(*SkeletonService).Create` now returns `(*Skeleton, error)`.
-- `(*SkeletonService).Find` now returns `(*Skeleton, error)`.
-- `(*SkeletonService).List` now returns `([]*Skeleton, error)`.
-- `Skeleton`: old is comparable; new is not because it embeds
-  `model.Model[Skeleton]`. Compare stable fields such as `ID` instead.
+- `NewTagService` now accepts `*data.DB` instead of
+  `*TagRepository`.
+- `(*TagService).Create` now returns `(*Tag, error)`.
+- `(*TagService).Find` now returns `(*Tag, error)`.
+- `(*TagService).List` now returns `([]*Tag, error)`.
+- `Tag`: old is comparable; new is not because it embeds
+  `model.Model[Tag]`. Compare stable fields such as `ID` instead.
 
 ### Removed
 
-- `SkeletonRepository` and `NewSkeletonRepository`.
-- `(*SkeletonRepository).Create`, `(*SkeletonRepository).Delete`,
-  `(*SkeletonRepository).Find`, `(*SkeletonRepository).List`, and
-  `(*SkeletonRepository).Update`. Add a Repository only for specialized
+- `TagRepository` and `NewTagRepository`.
+- `(*TagRepository).Create`, `(*TagRepository).Delete`,
+  `(*TagRepository).Find`, `(*TagRepository).List`, and
+  `(*TagRepository).Update`. Add a Repository only for specialized
   queries, reports, projections, read models, exports, or external storage.

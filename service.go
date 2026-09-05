@@ -1,4 +1,4 @@
-package skeleton
+package tags
 
 import (
 	"context"
@@ -18,15 +18,15 @@ const (
 	maxLimit     = 200
 )
 
-// sortableSkeleton is the ordering allowlist. A column name taken directly
+// sortableTag is the ordering allowlist. A column name taken directly
 // from a request would turn ordering into an injection surface.
-var sortableSkeleton = map[string]string{
+var sortableTag = map[string]string{
 	"":           "created_at",
 	"name":       "name",
 	"created_at": "created_at",
 }
 
-// SkeletonService holds the rules of this package.
+// TagService holds the rules of this package.
 //
 // It receives its collaborators through the constructor. There is no container
 // and no resolution by reflection: what this service is made of is written at
@@ -36,14 +36,14 @@ var sortableSkeleton = map[string]string{
 // Everything a handler is allowed to do goes through here. The service is the
 // only owner of the database handle, so the request layer cannot reach a Model
 // before the policy has answered.
-type SkeletonService struct {
+type TagService struct {
 	db     *data.DB
-	policy SkeletonPolicy
+	policy TagPolicy
 }
 
-// NewSkeletonService wires the service over the application's database handle.
-func NewSkeletonService(db *data.DB) *SkeletonService {
-	return &SkeletonService{db: db}
+// NewTagService wires the service over the application's database handle.
+func NewTagService(db *data.DB) *TagService {
+	return &TagService{db: db}
 }
 
 // CreateRequest is the input contract.
@@ -74,21 +74,21 @@ var _ validation.Validatable = CreateRequest{}
 // The candidate is authorized before it is stored, and the candidate is what
 // the policy sees -- so a rule about what may be created is a rule about the
 // record being created, and not about the person alone.
-func (s *SkeletonService) Create(ctx context.Context, actor security.Subject, in CreateRequest) (*Skeleton, error) {
+func (s *TagService) Create(ctx context.Context, actor security.Subject, in CreateRequest) (*Tag, error) {
 	if errs := in.Validate(); errs.Any() {
 		return nil, errs
 	}
 
-	proposed := Skeleton{Name: in.Name}
+	proposed := Tag{Name: in.Name}
 
-	g, err := security.Authorize(ctx, s.policy, actor, SkeletonCreate, proposed)
+	g, err := security.Authorize(ctx, s.policy, actor, TagCreate, proposed)
 	if err != nil {
 		return nil, err
 	}
 	if proposed.ID, err = data.NewID(); err != nil {
 		return nil, err
 	}
-	instance, err := Skeletons(s.db).NewInstance(nil, false)
+	instance, err := Tags(s.db).NewInstance(nil, false)
 	if err != nil {
 		return nil, err
 	}
@@ -116,13 +116,13 @@ func (s *SkeletonService) Create(ctx context.Context, actor security.Subject, in
 //
 // The read itself is already scoped by data.Tenant, so the second call is not
 // what keeps customers apart. It is what keeps the policy honest.
-func (s *SkeletonService) Find(ctx context.Context, actor security.Subject, id string) (*Skeleton, error) {
-	g, err := security.Authorize(ctx, s.policy, actor, SkeletonView, Skeleton{})
+func (s *TagService) Find(ctx context.Context, actor security.Subject, id string) (*Tag, error) {
+	g, err := security.Authorize(ctx, s.policy, actor, TagView, Tag{})
 	if err != nil {
 		return nil, err
 	}
 
-	record, err := Skeletons(s.db).NewQuery().WhereKey(id).First(ctx, g)
+	record, err := Tags(s.db).NewQuery().WhereKey(id).First(ctx, g)
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +130,7 @@ func (s *SkeletonService) Find(ctx context.Context, actor security.Subject, id s
 		return nil, ErrNotFound
 	}
 
-	if _, err := security.Authorize(ctx, s.policy, actor, SkeletonView, *record); err != nil {
+	if _, err := security.Authorize(ctx, s.policy, actor, TagView, *record); err != nil {
 		return nil, err
 	}
 	return record, nil
@@ -147,15 +147,15 @@ func (s *SkeletonService) Find(ctx context.Context, actor security.Subject, id s
 // A rule that hides individual records from a listing belongs in the statement,
 // as a predicate, and the action here is what decides whether the listing may
 // run at all.
-func (s *SkeletonService) List(ctx context.Context, actor security.Subject, q data.Query) ([]*Skeleton, error) {
-	g, err := security.Authorize(ctx, s.policy, actor, SkeletonList, Skeleton{})
+func (s *TagService) List(ctx context.Context, actor security.Subject, q data.Query) ([]*Tag, error) {
+	g, err := security.Authorize(ctx, s.policy, actor, TagList, Tag{})
 	if err != nil {
 		return nil, err
 	}
 
-	column, ok := sortableSkeleton[q.Sort]
+	column, ok := sortableTag[q.Sort]
 	if !ok {
-		return nil, fmt.Errorf("skeleton: sort field not allowed: %q", q.Sort)
+		return nil, fmt.Errorf("tags: sort field not allowed: %q", q.Sort)
 	}
 
 	limit := q.Limit
@@ -166,7 +166,7 @@ func (s *SkeletonService) List(ctx context.Context, actor security.Subject, q da
 		limit = maxLimit
 	}
 
-	rows := Skeletons(s.db)
+	rows := Tags(s.db)
 	page := rows.NewQuery()
 	if q.Cursor != "" {
 		anchor, err := rows.NewQuery().WhereKey(q.Cursor).Value(ctx, g, column)
@@ -176,9 +176,9 @@ func (s *SkeletonService) List(ctx context.Context, actor security.Subject, q da
 		if anchor == nil {
 			return nil, nil
 		}
-		page = page.Where(func(after *model.Builder[Skeleton]) {
+		page = page.Where(func(after *model.Builder[Tag]) {
 			after.Where(column, ">", anchor).
-				OrWhere(func(equal *model.Builder[Skeleton]) {
+				OrWhere(func(equal *model.Builder[Tag]) {
 					equal.Where(column, "=", anchor).Where("id", ">", q.Cursor)
 				})
 		})
