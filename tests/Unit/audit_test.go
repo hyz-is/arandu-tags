@@ -145,33 +145,37 @@ func firstCallTo(body *ast.BlockStmt, name string) token.Pos {
 // A nil-database denial test proves the closed path. This syntax audit is its
 // twin for an allowed path: Model construction is visible in the method body,
 // and moving it above Authorize fails even when no terminal is executed.
+//
+// It follows calls inside this package rather than reading one body at a time. A
+// use case that hands its work to a helper is the ordinary shape once there is
+// more than one of anything, and an audit that stopped at the body would report
+// every one of them as authorizing nothing -- so the first thing somebody does
+// to make it pass is move the Authorize call back up beside a Model reach it no
+// longer guards. What is followed is written down in reachesTheModel and
+// authorizesFirst below, and the helpers are held to the same rule.
 func TestEveryServiceMethodAuthorizesBeforeTheModel(t *testing.T) {
 	t.Parallel()
 
+	pkg := readPackage(t)
 	audited := 0
-	for _, source := range auditedFiles(t) {
-		for _, declaration := range source.file.Decls {
-			function, ok := declaration.(*ast.FuncDecl)
-			if !ok || function.Body == nil || receiverType(function) != "TagService" ||
-				!function.Name.IsExported() {
-				continue
-			}
-			audited++
+	for _, function := range pkg.ordered {
+		if receiverType(function.decl) != "TagService" || !function.decl.Name.IsExported() {
+			continue
+		}
+		audited++
 
-			decided := firstCallTo(function.Body, "Authorize")
-			reach := firstModelReach(function.Body)
-			if decided == token.NoPos {
-				t.Errorf("%s: %s never calls security.Authorize, so no Policy decided whether the Model may run",
-					source.path, function.Name.Name)
-			}
-			if reach == token.NoPos {
-				t.Errorf("%s: %s never reaches the configured Model, so this audit found no data boundary to order",
-					source.path, function.Name.Name)
-			}
-			if decided != token.NoPos && reach != token.NoPos && decided > reach {
-				t.Errorf("%s: %s reaches the Model before security.Authorize",
-					source.path, function.Name.Name)
-			}
+		decided := pkg.authorizesFirst(function)
+		reach := pkg.reachesTheModel(function)
+		if decided == token.NoPos {
+			t.Errorf("%s: %s never calls security.Authorize, so no Policy decided whether the Model may run",
+				function.path, function.name)
+		}
+		if reach == token.NoPos {
+			t.Errorf("%s: %s never reaches the configured Model, so this audit found no data boundary to order",
+				function.path, function.name)
+		}
+		if decided != token.NoPos && reach != token.NoPos && decided > reach {
+			t.Errorf("%s: %s reaches the Model before security.Authorize", function.path, function.name)
 		}
 	}
 	if audited == 0 {
@@ -179,35 +183,185 @@ func TestEveryServiceMethodAuthorizesBeforeTheModel(t *testing.T) {
 	}
 }
 
-// firstModelReach is where a Service first constructs the configured Model or
-// calls a promoted write terminal. Constructing one counts: moving only that
-// call before Authorize is the mutation this audit exists to reject.
+// TestEveryFunctionThatReachesTheModelHoldsAGrantOrTakesOne is what closes the
+// path the test above opens by following calls.
+//
+// A helper that reaches the Model is reached itself through one of two doors,
+// and there is no third: either it takes a security.Grant, in which case the
+// compiler will not let it be called without one somebody had to authorize for,
+// or it authorizes on its own before its first reach. A helper that did neither
+// would be a way into the tables that no Policy decided about, and it would make
+// every caller that delegates to it pass the audit above by delegation.
+func TestEveryFunctionThatReachesTheModelHoldsAGrantOrTakesOne(t *testing.T) {
+	t.Parallel()
+
+	pkg := readPackage(t)
+	audited := 0
+	for _, function := range pkg.ordered {
+		reach := pkg.reachesTheModel(function)
+		if reach == token.NoPos || function.takesGrant {
+			continue
+		}
+		audited++
+
+		decided := pkg.authorizesFirst(function)
+		switch {
+		case decided == token.NoPos:
+			t.Errorf("%s: %s reaches the Model, takes no security.Grant and authorizes nothing",
+				function.path, function.name)
+		case decided > reach:
+			t.Errorf("%s: %s reaches the Model before security.Authorize", function.path, function.name)
+		}
+	}
+	if audited == 0 {
+		t.Fatal("no function was found that reaches the Model without a Grant, so this test proved nothing")
+	}
+}
+
+// modelEntryPoints are the configured Model constructors of this package, and
+// modelTerminals the promoted writes on a row that already holds one.
 //
 // All three entry points are named. A Service that authorized before touching
 // the labels and then reached the associations or the position counter first
 // would pass an audit that knew about one of them.
-func firstModelReach(body *ast.BlockStmt) token.Pos {
-	entryPoints := map[string]bool{
-		"Tags": true, "Taggables": true, "tagSequences": true,
+var (
+	modelEntryPoints = map[string]bool{"Tags": true, "Taggables": true, "tagSequences": true}
+	modelTerminals   = map[string]bool{"Save": true, "Delete": true, "Restore": true, "Touch": true}
+)
+
+// auditedFunction is one function or method of this package, with the two facts
+// about its signature the audit reads.
+type auditedFunction struct {
+	// key identifies this declaration on its own, so the memo of one method
+	// called Save is not the memo of another.
+	key        string
+	name       string
+	path       string
+	decl       *ast.FuncDecl
+	takesGrant bool
+}
+
+// auditedPackage is every function of this package, with the two questions
+// memoised so a cycle in the call graph ends.
+type auditedPackage struct {
+	// byName resolves a call to the declaration it names, and holds nil where
+	// two declarations share the name.
+	byName  map[string]*auditedFunction
+	ordered []*auditedFunction
+	reaches map[string]token.Pos
+	decides map[string]token.Pos
+}
+
+// readPackage indexes the functions an application links.
+//
+// A call is recognised by the name it is written with, and syntax alone does not
+// say what a receiver is, so a name two declarations share resolves to neither.
+// The direction that leaves is the loud one: a use case whose helper cannot be
+// resolved is reported as authorizing nothing or as reaching nothing, and the
+// helper itself is still audited on its own -- so an ambiguous name hides no
+// path into the tables, it only makes somebody rename one of the two.
+func readPackage(t *testing.T) *auditedPackage {
+	t.Helper()
+
+	pkg := &auditedPackage{
+		byName:  map[string]*auditedFunction{},
+		reaches: map[string]token.Pos{},
+		decides: map[string]token.Pos{},
 	}
-	terminals := map[string]bool{
-		"Save": true, "Delete": true, "Restore": true, "Touch": true,
+	ambiguous := map[string]bool{}
+	for _, source := range auditedFiles(t) {
+		for _, declaration := range source.file.Decls {
+			function, ok := declaration.(*ast.FuncDecl)
+			if !ok || function.Body == nil {
+				continue
+			}
+			name := function.Name.Name
+			entry := &auditedFunction{
+				key:        source.path + "#" + receiverType(function) + "." + name,
+				name:       name,
+				path:       source.path,
+				decl:       function,
+				takesGrant: takesGrant(function),
+			}
+			if _, taken := pkg.byName[name]; taken {
+				ambiguous[name] = true
+			}
+			pkg.byName[name] = entry
+			pkg.ordered = append(pkg.ordered, entry)
+		}
 	}
+	for name := range ambiguous {
+		pkg.byName[name] = nil
+	}
+	return pkg
+}
+
+// takesGrant reports whether a security.Grant is one of the parameters, which is
+// the compiler's own proof that whoever called this had authorized something.
+func takesGrant(function *ast.FuncDecl) bool {
+	if function.Type.Params == nil {
+		return false
+	}
+	for _, parameter := range function.Type.Params.List {
+		if namedType(parameter.Type) == "Grant" {
+			return true
+		}
+	}
+	return false
+}
+
+// reachesTheModel is where this function first reaches the configured Model,
+// directly or through another function of this package.
+//
+// Constructing one counts: moving only that call before Authorize is the
+// mutation this audit exists to reject.
+func (p *auditedPackage) reachesTheModel(function *auditedFunction) token.Pos {
+	return p.firstOf(function, p.reaches,
+		func(called string) bool { return modelEntryPoints[called] || modelTerminals[called] },
+		p.reachesTheModel)
+}
+
+// authorizesFirst is where this function first takes a decision, directly or
+// through another function of this package that takes one before it reaches
+// anything.
+func (p *auditedPackage) authorizesFirst(function *auditedFunction) token.Pos {
+	return p.firstOf(function, p.decides,
+		func(called string) bool { return called == "Authorize" },
+		p.authorizesFirst)
+}
+
+// firstOf is the earliest call in a body that either is the thing being looked
+// for or leads to it through a function of this package.
+//
+// The answer is memoised before the body is walked, so a function that reaches
+// itself is answered with "not here" on the way round rather than recurring
+// forever.
+func (p *auditedPackage) firstOf(function *auditedFunction, memo map[string]token.Pos,
+	direct func(string) bool, indirect func(*auditedFunction) token.Pos) token.Pos {
+	if found, answered := memo[function.key]; answered {
+		return found
+	}
+	memo[function.key] = token.NoPos
+
 	found := token.NoPos
-	ast.Inspect(body, func(node ast.Node) bool {
+	ast.Inspect(function.decl.Body, func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
 		if !ok {
 			return true
 		}
-		name := calledName(call)
-		if !entryPoints[name] && !terminals[name] {
-			return true
+		called := calledName(call)
+		if !direct(called) {
+			target := p.byName[called]
+			if target == nil || target.key == function.key || indirect(target) == token.NoPos {
+				return true
+			}
 		}
 		if found == token.NoPos || call.Pos() < found {
 			found = call.Pos()
 		}
 		return true
 	})
+	memo[function.key] = found
 	return found
 }
 

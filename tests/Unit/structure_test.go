@@ -305,7 +305,7 @@ func inspectServiceBoundary(t *testing.T, root string) {
 		t.Fatal("Module has no Routes method")
 	}
 
-	handlers := registeredHandlers(routes)
+	handlers := registeredHandlers(routes, methods)
 	if len(handlers) == 0 {
 		t.Fatal("Routes registers no Module handler")
 	}
@@ -384,22 +384,29 @@ func productionGoFiles(t *testing.T, root string) []parsedGoFile {
 	return files
 }
 
-func registeredHandlers(routes *ast.FuncDecl) map[string]bool {
+// registeredHandlers is every method of Module that Routes hands to the router.
+//
+// It reads the whole body rather than the last argument of a call, because a
+// handler reaches the router by more than one shape: written into the
+// registration directly, or put in a table the registration reads. Both are
+// still a method named in Routes and nothing else in that body is, so the method
+// set is what tells a handler from a field -- m.index is one and m.cfg is not.
+func registeredHandlers(routes *ast.FuncDecl, methods map[string]*ast.FuncDecl) map[string]bool {
 	handlers := map[string]bool{}
 	receiver := receiverName(routes)
 	ast.Inspect(routes.Body, func(node ast.Node) bool {
-		call, ok := node.(*ast.CallExpr)
-		if !ok || len(call.Args) == 0 {
-			return true
-		}
-		handler, ok := call.Args[len(call.Args)-1].(*ast.SelectorExpr)
+		selector, ok := node.(*ast.SelectorExpr)
 		if !ok {
 			return true
 		}
-		owner, ok := handler.X.(*ast.Ident)
-		if ok && owner.Name == receiver {
-			handlers[handler.Sel.Name] = true
+		owner, ok := selector.X.(*ast.Ident)
+		if !ok || owner.Name != receiver || methods[selector.Sel.Name] == nil {
+			return true
 		}
+		if selector.Sel.Name == routes.Name.Name {
+			return true
+		}
+		handlers[selector.Sel.Name] = true
 		return true
 	})
 	return handlers
