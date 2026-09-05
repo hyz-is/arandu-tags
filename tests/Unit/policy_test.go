@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/arandu-io/framework/data"
 	"github.com/arandu-io/framework/security"
@@ -171,6 +172,74 @@ func TestTheServiceRefusesBeforeReachingTheModel(t *testing.T) {
 			_, err := service.OwnersWithoutAnyTag(ctx, administrator(), articleType, ids, ids)
 			return err
 		},
+		"OwnersWithAnyTagOfTaxonomy": func() error {
+			_, err := service.OwnersWithAnyTagOfTaxonomy(ctx, administrator(), articleType, []string{"status"})
+			return err
+		},
+		"AttachTags": func() error {
+			_, err := service.AttachTags(ctx, administrator(), ref, ids)
+			return err
+		},
+		"DetachTags": func() error {
+			_, err := service.DetachTags(ctx, administrator(), ref, ids)
+			return err
+		},
+		"DetachAllTags": func() error {
+			_, err := service.DetachAllTags(ctx, administrator(), ref)
+			return err
+		},
+		"SyncTags": func() error {
+			_, _, err := service.SyncTags(ctx, administrator(), ref, ids)
+			return err
+		},
+		"SyncTagsOfTaxonomy": func() error {
+			_, _, err := service.SyncTagsOfTaxonomy(ctx, administrator(), ref, "status", ids)
+			return err
+		},
+		"HasTag": func() error {
+			_, err := service.HasTag(ctx, administrator(), ref, "record-1")
+			return err
+		},
+		"TagsOfTaxonomy": func() error {
+			_, err := service.TagsOfTaxonomy(ctx, administrator(), ref, "status")
+			return err
+		},
+		"FindByName": func() error {
+			_, err := service.FindByName(ctx, administrator(), "status", "Draft")
+			return err
+		},
+		"FindManyByName": func() error {
+			_, err := service.FindManyByName(ctx, administrator(), "status", []string{"Draft"})
+			return err
+		},
+		"FindInAnyTaxonomy": func() error {
+			_, err := service.FindInAnyTaxonomy(ctx, administrator(), "Draft")
+			return err
+		},
+		"FindOrCreate": func() error {
+			_, err := service.FindOrCreate(ctx, administrator(), "status", []string{"Draft"})
+			return err
+		},
+		"Search": func() error {
+			_, err := service.Search(ctx, administrator(), "status", "dra", data.Query{})
+			return err
+		},
+		"Taxonomies": func() error { _, err := service.Taxonomies(ctx, administrator()); return err },
+		"Reorder": func() error {
+			_, err := service.Reorder(ctx, administrator(), "status", ids)
+			return err
+		},
+		"MoveUp":      func() error { _, err := service.MoveUp(ctx, administrator(), "record-1"); return err },
+		"MoveDown":    func() error { _, err := service.MoveDown(ctx, administrator(), "record-1"); return err },
+		"MoveToStart": func() error { _, err := service.MoveToStart(ctx, administrator(), "record-1"); return err },
+		"MoveToEnd":   func() error { _, err := service.MoveToEnd(ctx, administrator(), "record-1"); return err },
+		"SwapOrder": func() error {
+			return service.SwapOrder(ctx, administrator(), "record-1", "record-2")
+		},
+		"UnusedTags": func() error {
+			_, err := service.UnusedTags(ctx, administrator(), "status")
+			return err
+		},
 	} {
 		if err := call(); !errors.Is(err, security.ErrForbidden) {
 			t.Errorf("%s reached the Model before the policy refusal: %v", name, err)
@@ -194,9 +263,14 @@ func TestEveryExportedServiceMethodIsRefused(t *testing.T) {
 	sort.Strings(declared)
 
 	want := []string{
-		"Attach", "Create", "Delete", "Detach", "Find", "List", "Move",
-		"OwnersWithAllTags", "OwnersWithAnyTag", "OwnersWithoutAnyTag",
-		"Rename", "TagsOf",
+		"Attach", "AttachTags", "Create", "Delete", "Detach", "DetachAllTags",
+		"DetachTags", "Find", "FindByName", "FindInAnyTaxonomy",
+		"FindManyByName", "FindOrCreate", "HasTag", "List", "Move", "MoveDown",
+		"MoveToEnd", "MoveToStart", "MoveUp", "OwnersWithAllTags",
+		"OwnersWithAnyTag", "OwnersWithAnyTagOfTaxonomy", "OwnersWithoutAnyTag",
+		"Rename", "Reorder", "Search", "SwapOrder", "SyncTags",
+		"SyncTagsOfTaxonomy", "TagsOf", "TagsOfTaxonomy", "Taxonomies",
+		"UnusedTags",
 	}
 	if !slices.Equal(declared, want) {
 		t.Fatalf("the service declares %v; the refusal test covers %v. Add the new method there before adding it here", declared, want)
@@ -266,21 +340,74 @@ func TestTheRequestValidatesItsInput(t *testing.T) {
 func TestTheConfigurationRefusesWhatCannotWork(t *testing.T) {
 	t.Parallel()
 
+	issuer := security.NewCSRF([]byte("0123456789abcdef0123456789abcdef"), time.Hour)
 	for name, cfg := range map[string]tags.Config{
-		"no tenant":        {},
-		"tenant with a /":  {Tenant: "acme/reports"},
-		"tenant uppercase": {Tenant: "Acme"},
-		"relative prefix":  {Tenant: "acme", Prefix: "tags"},
-		"page size too big": {Tenant: "acme",
+		"no tenant":        {CSRF: issuer},
+		"tenant with a /":  {Tenant: "acme/reports", CSRF: issuer},
+		"tenant uppercase": {Tenant: "Acme", CSRF: issuer},
+		"relative prefix":  {Tenant: "acme", Prefix: "tags", CSRF: issuer},
+		"page size too big": {Tenant: "acme", CSRF: issuer,
 			PageSize: tags.MaxPageSize + 1},
-		"negative page size": {Tenant: "acme", PageSize: -1},
+		"negative page size": {Tenant: "acme", CSRF: issuer, PageSize: -1},
+		"no CSRF issuer":     {Tenant: "acme"},
 	} {
 		if err := cfg.Validate(); err == nil {
 			t.Errorf("the configuration with %s was accepted", name)
 		}
 	}
 
-	if err := (tags.Config{Tenant: "acme"}).Validate(); err != nil {
+	if err := (tags.Config{Tenant: "acme", CSRF: issuer}).Validate(); err != nil {
 		t.Fatalf("a valid configuration was refused: %v", err)
 	}
+}
+
+// TestTheShippedPolicyIsTheOneAModuleUsesUntilAnApplicationWritesOne holds both
+// halves of the one place the rules can be replaced.
+//
+// An application installs this package with `go get` and cannot edit the policy
+// inside it, so Config carries one. The half that matters is the default: a
+// wiring that says nothing about rules gets TagPolicy, which denies everything.
+func TestTheShippedPolicyIsTheOneAModuleUsesUntilAnApplicationWritesOne(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	issuer := security.NewCSRF([]byte("0123456789abcdef0123456789abcdef"), time.Hour)
+	sessions := security.NewSessionStore([]byte("0123456789abcdef0123456789abcdef"), time.Hour, false, security.NewMemoryBackend())
+
+	// Nothing said about rules, and the handle wraps nothing: a refusal that
+	// arrives rather than a panic is a refusal that happened before the Model.
+	closed, err := tags.New(tags.Config{Tenant: "acme", CSRF: issuer}, nilHandle(), sessions)
+	if err != nil {
+		t.Fatalf("building the module: %v", err)
+	}
+	if _, err := closed.Service().List(ctx, administrator(), "", data.Query{}); !errors.Is(err, security.ErrForbidden) {
+		t.Fatalf("a module wired with no policy allowed a listing: %v", err)
+	}
+
+	// And an application's own policy is the one consulted, which is what makes
+	// the package installable without forking it.
+	open, err := tags.New(tags.Config{Tenant: "acme", CSRF: issuer, Policy: countingPolicy{}}, nilHandle(), sessions)
+	if err != nil {
+		t.Fatalf("building the module with a policy: %v", err)
+	}
+	// It reaches the Model and panics on the nil handle, which is the proof that
+	// the policy said yes: a refusal would have returned before the statement.
+	func() {
+		defer func() {
+			if recovered := recover(); recovered == nil {
+				t.Error("the application's policy was not the one consulted")
+			}
+		}()
+		_, _ = open.Service().List(ctx, administrator(), "", data.Query{})
+	}()
+}
+
+// countingPolicy allows everything, and is only ever used to tell "the policy
+// this application wrote ran" from "the shipped one refused".
+type countingPolicy struct{}
+
+var _ security.Policy[tags.Tag] = countingPolicy{}
+
+func (countingPolicy) Can(context.Context, security.Subject, security.Action, tags.Tag) error {
+	return nil
 }

@@ -3,9 +3,11 @@ package tags
 import (
 	"embed"
 	"io/fs"
+	"strconv"
 	"strings"
 
 	"github.com/arandu-io/framework/foundation"
+	"github.com/arandu-io/hesape/view"
 )
 
 // The view sources this package hands to the project that installs it.
@@ -40,6 +42,221 @@ const (
 // the tree of the sources. It is build output: gitignored, rebuilt on demand,
 // and never edited.
 const compiledRoot = "storage/framework/views"
+
+// The names the screens are rendered by.
+//
+// They are constants because each one is written in a handler and derived again
+// from a path, and a page rendered by a name nothing registered is a 500 that
+// says nothing about which of the two spellings was wrong. ViewNames derives the
+// same set from the archive, and a test holds the two together.
+const (
+	// ViewIndex is the listing of one taxonomy.
+	ViewIndex = "vendor.tags.index"
+	// ViewEdit is the form that renames one label.
+	ViewEdit = "vendor.tags.edit"
+	// ViewOrder is the screen a whole taxonomy is rearranged on.
+	ViewOrder = "vendor.tags.order"
+	// ViewPicker is the fragment an application draws inside a screen of its
+	// own, to show and change what one of its entities carries.
+	ViewPicker = "vendor.tags.picker"
+)
+
+// Compile-time proof that every screen can be drawn inside the application's
+// layout. The layout takes its data through this contract at render time, so a
+// page that stopped answering it would be a page that renders as a 500 in
+// somebody else's application rather than a build failure in this one.
+var (
+	_ view.Layout = IndexPageData{}
+	_ view.Layout = EditPageData{}
+	_ view.Layout = OrderPageData{}
+)
+
+// Row is one label as a screen draws it.
+//
+// It is a snapshot and not the entity, for the reason Resource is one: an
+// encoder or a template handed the entity draws whatever fields it happens to
+// have, including the ones somebody adds later without opening the markup -- and
+// TenantID is exactly such a field.
+type Row struct {
+	// ID is what a form submits and a link addresses.
+	ID string
+	// Label is what a person reads: the catalogue's line for this label, or the
+	// name on the row when nobody has written one.
+	Label string
+	// Name is what is in the box when the label is being renamed, which is the
+	// stored name rather than the translated one -- renaming a translation would
+	// write one language into a column every language reads.
+	Name string
+	// Slug is what other systems have written down. It is shown and never
+	// edited.
+	Slug string
+	// Taxonomy is the taxonomy this label is in, as stored.
+	Taxonomy string
+	// TaxonomyLabel is that taxonomy as a person reads it.
+	TaxonomyLabel string
+	// Position is where it sits, as text, because a screen shows it and no
+	// screen does arithmetic on it.
+	Position string
+	// First and Last say whether this row is at an edge of its listing, so the
+	// arrows that would do nothing are drawn as doing nothing.
+	First bool
+	Last  bool
+	// Held says whether the entity a picker is drawn for carries this label. It
+	// is false everywhere else, because everywhere else there is no entity for
+	// it to be about.
+	Held bool
+}
+
+// IndexPageData is what the listing screen is handed.
+type IndexPageData struct {
+	view.Page
+
+	// Prefix is where this module answers, so the markup composes its own
+	// addresses instead of hard-coding one the configuration can change.
+	Prefix string
+	// Labels are the sentences this screen draws, resolved for the locale the
+	// request asked for.
+	Labels Labels
+	// Taxonomy is the one being listed, as stored, and Taxonomies is every one
+	// this customer holds a label in.
+	Taxonomy   string
+	Taxonomies []string
+	// Search is the term the listing was narrowed by, echoed back into the field
+	// so the box still says what is being looked at.
+	Search string
+	// Rows are the labels, and Next is the cursor of the following page, empty
+	// on the last one.
+	Rows []Row
+	Next string
+}
+
+// EditPageData is what the rename screen is handed.
+type EditPageData struct {
+	view.Page
+
+	Prefix string
+	Labels Labels
+	// Row is the label being renamed.
+	Row Row
+}
+
+// OrderPageData is what the ordering screen is handed.
+type OrderPageData struct {
+	view.Page
+
+	Prefix string
+	Labels Labels
+	// Taxonomy is the one being rearranged, as stored.
+	Taxonomy string
+	// Rows are every label of it, in the order they are in.
+	Rows []Row
+}
+
+// PickerData is what the association fragment is handed.
+//
+// It is filled by the application and not by this module, and that is the whole
+// point of it: whether somebody may tag an article is a question about the
+// article, so the handler that answers it is the one that owns the article. What
+// this package contributes is the markup and the shape -- Action is the
+// application's own route, and the form posts there.
+type PickerData struct {
+	// Labels are the sentences the fragment draws.
+	Labels Labels
+	// Token is the CSRF token of the page this fragment is drawn inside.
+	Token string
+	// Action is where the form posts: a route of the application, never of this
+	// module.
+	Action string
+	// Taxonomy is the taxonomy being shown, as stored.
+	Taxonomy string
+	// Carried are the labels the entity has, and Available are the ones it could
+	// be given.
+	Carried   []Row
+	Available []Row
+}
+
+// row snapshots one label for a screen.
+func (m *Module) row(labels Labels, record *Tag) Row {
+	if record == nil {
+		return Row{}
+	}
+	return Row{
+		ID:            record.ID,
+		Label:         labels.Tag(*record),
+		Name:          record.Name,
+		Slug:          record.Slug,
+		Taxonomy:      record.Type,
+		TaxonomyLabel: labels.Taxonomy(record.Type),
+		Position:      strconv.FormatInt(record.Position, 10),
+	}
+}
+
+// rows snapshots a listing, and says which of them are at its edges.
+//
+// The edges are worked out here rather than in the markup, because the markup
+// iterates without an index: a screen that had to know it was drawing the first
+// row would need a counter the template language does not give it, and the
+// answer is data.
+func (m *Module) rows(labels Labels, records []*Tag) []Row {
+	out := make([]Row, 0, len(records))
+	for i, record := range records {
+		row := m.row(labels, record)
+		row.First = i == 0
+		row.Last = i == len(records)-1
+		out = append(out, row)
+	}
+	return out
+}
+
+// Rows snapshots labels for a screen an application draws itself.
+//
+// It is exported because PickerData is filled outside this package: an
+// application holding the labels of one of its entities needs the same snapshot
+// the module's own screens are drawn from, and writing a second one is writing a
+// second answer to what a label looks like.
+func (m *Module) Rows(labels Labels, records []*Tag) []Row { return m.rows(labels, records) }
+
+// PickerRows snapshots the labels an entity could carry, saying which of them it
+// already does.
+//
+// The two lists are passed rather than looked up, because the entity is the
+// application's: this package can answer which labels exist and which
+// identifiers carry one, and the handler that owns the entity is the one that
+// has already decided it may ask.
+func (m *Module) PickerRows(labels Labels, available, carried []*Tag) []Row {
+	held := make(map[string]bool, len(carried))
+	for _, record := range carried {
+		if record != nil {
+			held[record.ID] = true
+		}
+	}
+	rows := m.rows(labels, available)
+	for i := range rows {
+		rows[i].Held = held[rows[i].ID]
+	}
+	return rows
+}
+
+// FormState is what a kyse input asks for its message and for what was typed.
+//
+// It exists because the component library asks for FieldError and the page the
+// framework carries answers First. One adapter, in one place, rather than the
+// same three lines on every screen -- and it is a type rather than a method on
+// each page so that a screen added later cannot forget to write it.
+type FormState struct{ view.Page }
+
+// FieldError is the first message for an input, and empty for an input nothing
+// rejected.
+func (f FormState) FieldError(name string) string { return f.First(name) }
+
+// Form is the state the inputs of this screen read.
+func (d IndexPageData) Form() FormState { return FormState{Page: d.Page} }
+
+// Form is the state the inputs of this screen read.
+func (d EditPageData) Form() FormState { return FormState{Page: d.Page} }
+
+// Form is the state the inputs of this screen read.
+func (d OrderPageData) Form() FormState { return FormState{Page: d.Page} }
 
 // vendorDir is the directory an application keeps other people's views in.
 //

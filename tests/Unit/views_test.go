@@ -42,9 +42,20 @@ const sessionKey = "0123456789abcdef0123456789abcdef"
 
 func module(t *testing.T) *tags.Module {
 	t.Helper()
+	return moduleWith(t, tags.Config{Tenant: "acme"})
+}
+
+// moduleWith builds the module over one configuration, filling in the
+// collaborators every configuration needs so a test writes only the setting it
+// is about.
+func moduleWith(t *testing.T, cfg tags.Config) *tags.Module {
+	t.Helper()
 
 	sessions := security.NewSessionStore([]byte(sessionKey), time.Hour, false, security.NewMemoryBackend())
-	m, err := tags.New(tags.Config{Tenant: "acme"}, data.Wrap(nil, data.DialectSQLite), sessions)
+	if cfg.CSRF == nil {
+		cfg.CSRF = security.NewCSRF([]byte(sessionKey), time.Hour)
+	}
+	m, err := tags.New(cfg, data.Wrap(nil, data.DialectSQLite), sessions)
 	if err != nil {
 		t.Fatalf("building the module: %v", err)
 	}
@@ -258,5 +269,23 @@ func TestThePackageShipsNoCommandOfItsOwn(t *testing.T) {
 			t.Errorf("%s is a command this module carries; what a package publishes is declared, and %s writes it",
 				source.path, tags.PublishCommand)
 		}
+	}
+}
+
+// TestEveryScreenIsRenderedByANameTheArchiveCarries keeps the constants a
+// handler renders by and the names derived from the published files together.
+//
+// They are two spellings of one thing: a constant nothing registered is a 500
+// on the screen it names, and a published file no constant names is a file the
+// installer compiles and nothing ever draws. Neither says anything on its own.
+func TestEveryScreenIsRenderedByANameTheArchiveCarries(t *testing.T) {
+	t.Parallel()
+
+	declared := tags.ViewNames()
+	rendered := []string{tags.ViewEdit, tags.ViewIndex, tags.ViewOrder, tags.ViewPicker}
+	slices.Sort(rendered)
+
+	if !slices.Equal(declared, rendered) {
+		t.Fatalf("the archive carries %v and the package renders %v", declared, rendered)
 	}
 }

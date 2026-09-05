@@ -6,14 +6,19 @@
 // The files are laid out by role rather than by layer, so the whole package
 // reads top to bottom:
 //
-//	module.go      -> registration, routes, handlers and migrations
-//	config.go      -> what the application passes in
-//	model.go       -> the entities, and what they may answer with
-//	owner.go       -> how an entity says which kind it is
-//	policy.go      -> who may do what
-//	service.go     -> the rules and Model access, after authorization
-//	label.go       -> the label of a tag, in a locale
-//	views.go       -> the files the application takes ownership of
+//	module.go        -> registration, routes, handlers and migrations
+//	config.go        -> what the application passes in, and the route table
+//	model.go         -> the entities, and what they may answer with
+//	owner.go         -> how an entity says which kind it is
+//	policy.go        -> who may do what
+//	service.go       -> the rules and Model access, after authorization
+//	lookup.go        -> finding a label by what somebody typed
+//	associations.go  -> what one entity carries, as a set
+//	ordering.go      -> where a label sits, and how it is moved
+//	label.go         -> the label of a tag, in a locale
+//	translation.go   -> the sentences this package ships
+//	commands.go      -> what an operator runs from a terminal
+//	views.go         -> the screens, and the files the project takes over
 //
 // An application registers it explicitly. There is no service provider, no
 // container and no discovery: the wiring is three lines somebody wrote, and
@@ -21,12 +26,24 @@
 //
 // # The routes cover the taxonomy, and the associations are a Go call
 //
-// The three routes list, read and create labels. Nothing here attaches a label
-// to an entity over HTTP, and that is deliberate: whether a caller may tag an
-// article is a question about the article, and the policy that answers it
-// belongs to whoever owns that table. An application attaches from its own
-// handler, where it has already asked. A route here would have to take the
-// entity's kind and identifier from the request and tag whatever it was given.
+// The routes list, read, create, rename, delete and reorder labels. Nothing
+// here attaches a label to an entity over HTTP, and that is deliberate: whether
+// a caller may tag an article is a question about the article, and the policy
+// that answers it belongs to whoever owns that table. An application attaches
+// from its own handler, where it has already asked. A route here would have to
+// take the entity's kind and identifier from the request and tag whatever it was
+// given.
+//
+// The screen for it is published all the same: ViewPicker is a fragment the
+// application draws inside a page of its own, filled from PickerData, and the
+// form on it posts to the application's route rather than to one of these.
+//
+// # Two shapes, one route each
+//
+// Every handler answers a screen or a resource, and what decides is
+// ctx.WantsJSON -- the framework's own question, so that this package does not
+// invent a second rule for which requests get markup. htmx is on the screen side
+// of that line, because it swaps HTML.
 package tags
 
 import (
@@ -34,6 +51,7 @@ import (
 	"errors"
 	"fmt"
 	stdhttp "net/http"
+	"net/url"
 	"strings"
 
 	"github.com/arandu-io/framework/data"
@@ -43,6 +61,7 @@ import (
 	"github.com/arandu-io/framework/validation"
 	"github.com/arandu-io/hesape/database/migrations"
 	"github.com/arandu-io/hesape/database/schema"
+	"github.com/arandu-io/hesape/translation"
 	"github.com/arandu-io/hesape/view"
 )
 
@@ -92,9 +111,17 @@ func New(cfg Config, db *data.DB, sessions *security.SessionStore) (*Module, err
 		return nil, errors.New("tags: New needs a session store: it is where the subject comes from, and a request with no subject cannot be authorized")
 	}
 	cfg = cfg.withDefaults()
+	service := NewTagService(db)
+	if cfg.Policy != nil {
+		// The one place the shipped policy is replaced, and it is a field of the
+		// configuration the application already writes rather than a setter: a
+		// service whose rules can be swapped after it has answered a request is
+		// a service whose rules nobody can state.
+		service.policy = cfg.Policy
+	}
 	return &Module{
 		cfg:      cfg,
-		svc:      NewTagService(db),
+		svc:      service,
 		sessions: sessions,
 	}, nil
 }
@@ -118,10 +145,25 @@ func (m *Module) Name() string { return "tags" }
 // They are named, so a URL is built from a name rather than written out a
 // second time somewhere else -- two spellings of one address disagree, and the
 // failure when they do is a link to a 404.
+//
+// The table itself is routePatterns, which Config already registered on a
+// throwaway mux to find out whether the standard library would take the prefix.
+// One list, read twice: a second one here would be a table the configuration was
+// never checked against.
 func (m *Module) Routes(r *fhttp.Router) {
-	r.Action(stdhttp.MethodGet, m.cfg.Prefix, m.index).Name("tags.index")
-	r.Action(stdhttp.MethodGet, m.cfg.Prefix+"/{id}", m.show).Name("tags.show")
-	r.Action(stdhttp.MethodPost, m.cfg.Prefix, m.store).Name("tags.store")
+	handlers := map[string]func(*fhttp.Context) error{
+		"tags.index":   m.index,
+		"tags.store":   m.store,
+		"tags.order":   m.order,
+		"tags.reorder": m.reorder,
+		"tags.show":    m.show,
+		"tags.update":  m.update,
+		"tags.destroy": m.destroy,
+		"tags.move":    m.move,
+	}
+	for _, route := range routePatterns(m.cfg.Prefix) {
+		r.Action(route.method, route.pattern, handlers[route.name]).Name(route.name)
+	}
 }
 
 // PublishCommand is what an application runs to take ownership of the views
@@ -192,16 +234,31 @@ func (m *Module) Boot(context.Context) error {
 // rule, database handle or Model construction lives here. A handler that
 // reached data directly would skip the service's policy boundary, and the
 // layout makes that visible rather than relying on review.
+//
+// Every one of them answers in two shapes, and the choice is not this package's
+// to invent: ctx.WantsJSON is the framework's own question, asked once per
+// handler. A browser gets the screen, something that asked for JSON gets the
+// resource, and htmx -- which swaps markup -- is deliberately on the screen side
+// of that line.
 
-// index answers a page of one taxonomy.
+// index answers a page of one taxonomy, as the listing or as a collection.
 func (m *Module) index(ctx *fhttp.Context) error {
+	actor := m.subject(ctx.Request)
+	taxonomy := ctx.Query("type")
+	search := strings.TrimSpace(ctx.Query("q"))
 	query := data.Query{
 		Sort:   ctx.Query("sort"),
 		Cursor: ctx.Query("cursor"),
 		Limit:  m.cfg.PageSize,
 	}
 
-	records, err := m.svc.List(ctx.Ctx(), m.subject(ctx.Request), ctx.Query("type"), query)
+	var records []*Tag
+	var err error
+	if search != "" {
+		records, err = m.svc.Search(ctx.Ctx(), actor, taxonomy, search, query)
+	} else {
+		records, err = m.svc.List(ctx.Ctx(), actor, taxonomy, query)
+	}
 	if err != nil {
 		return m.answer(ctx, err)
 	}
@@ -213,16 +270,44 @@ func (m *Module) index(ctx *fhttp.Context) error {
 	if len(records) == m.cfg.PageSize {
 		cursor = records[len(records)-1].ID
 	}
-	return ctx.JSON(stdhttp.StatusOK, collectionFromPointers(records, cursor))
+	if ctx.WantsJSON() {
+		return ctx.JSON(stdhttp.StatusOK, collectionFromPointers(records, cursor))
+	}
+
+	taxonomies, err := m.svc.Taxonomies(ctx.Ctx(), actor)
+	if err != nil {
+		return m.answer(ctx, err)
+	}
+	labels := m.Labels(m.locale(ctx.Request))
+	return ctx.View(ViewIndex, IndexPageData{
+		Page:       m.page(ctx, labels.T("screen.index_title")),
+		Prefix:     m.cfg.Prefix,
+		Labels:     labels,
+		Taxonomy:   taxonomy,
+		Taxonomies: taxonomies,
+		Search:     search,
+		Rows:       m.rows(labels, records),
+		Next:       cursor,
+	})
 }
 
-// show answers one record.
+// show answers one record, as the form that edits it or as the resource.
 func (m *Module) show(ctx *fhttp.Context) error {
 	record, err := m.svc.Find(ctx.Ctx(), m.subject(ctx.Request), ctx.Param("id"))
 	if err != nil {
 		return m.answer(ctx, err)
 	}
-	return ctx.JSON(stdhttp.StatusOK, resourceFromPointer(record))
+	if ctx.WantsJSON() {
+		return ctx.JSON(stdhttp.StatusOK, resourceFromPointer(record))
+	}
+
+	labels := m.Labels(m.locale(ctx.Request))
+	return ctx.View(ViewEdit, EditPageData{
+		Page:   m.page(ctx, labels.T("screen.edit_title")),
+		Prefix: m.cfg.Prefix,
+		Labels: labels,
+		Row:    m.row(labels, record),
+	})
 }
 
 // store creates one record.
@@ -233,7 +318,162 @@ func (m *Module) store(ctx *fhttp.Context) error {
 	if err != nil {
 		return m.answer(ctx, err)
 	}
-	return ctx.JSON(stdhttp.StatusCreated, resourceFromPointer(record))
+	if ctx.WantsJSON() {
+		return ctx.JSON(stdhttp.StatusCreated, resourceFromPointer(record))
+	}
+	return ctx.Redirect(m.listingOf(record.Type))
+}
+
+// update renames one record.
+func (m *Module) update(ctx *fhttp.Context) error {
+	in := RenameRequest{Name: ctx.Input("name")}
+
+	record, err := m.svc.Rename(ctx.Ctx(), m.subject(ctx.Request), ctx.Param("id"), in)
+	if err != nil {
+		return m.answer(ctx, err)
+	}
+	if ctx.WantsJSON() {
+		return ctx.JSON(stdhttp.StatusOK, resourceFromPointer(record))
+	}
+	return ctx.Redirect(m.listingOf(record.Type))
+}
+
+// destroy removes one record and every association to it.
+func (m *Module) destroy(ctx *fhttp.Context) error {
+	actor := m.subject(ctx.Request)
+
+	// Read before the delete, because the answer is a listing of the taxonomy
+	// the record was in and the record is what says which one that is. Asking
+	// afterwards is asking about a row that is gone.
+	record, err := m.svc.Find(ctx.Ctx(), actor, ctx.Param("id"))
+	if err != nil {
+		return m.answer(ctx, err)
+	}
+	if err := m.svc.Delete(ctx.Ctx(), actor, record.ID); err != nil {
+		return m.answer(ctx, err)
+	}
+	if ctx.WantsJSON() {
+		return ctx.Status(stdhttp.StatusNoContent)
+	}
+	return ctx.Redirect(m.listingOf(record.Type))
+}
+
+// order answers the screen a whole taxonomy is rearranged on.
+//
+// It reads the taxonomy in one page rather than paging, because an order is
+// about all of it: a screen showing a window onto the order cannot say what
+// moving the last row of the window does to the row after it.
+func (m *Module) order(ctx *fhttp.Context) error {
+	actor := m.subject(ctx.Request)
+	taxonomy := ctx.Query("type")
+
+	records, err := m.svc.List(ctx.Ctx(), actor, taxonomy, data.Query{Limit: MaxIDsPerQuery})
+	if err != nil {
+		return m.answer(ctx, err)
+	}
+	if ctx.WantsJSON() {
+		return ctx.JSON(stdhttp.StatusOK, collectionFromPointers(records, ""))
+	}
+
+	labels := m.Labels(m.locale(ctx.Request))
+	return ctx.View(ViewOrder, OrderPageData{
+		Page:     m.page(ctx, labels.T("screen.order_title")),
+		Prefix:   m.cfg.Prefix,
+		Labels:   labels,
+		Taxonomy: taxonomy,
+		Rows:     m.rows(labels, records),
+	})
+}
+
+// reorder writes one order over a whole taxonomy, from the identifiers the form
+// submitted in the order they appear in it.
+func (m *Module) reorder(ctx *fhttp.Context) error {
+	if err := ctx.Request.ParseForm(); err != nil {
+		fhttp.Refuse(ctx.Response, ctx.Request, stdhttp.StatusBadRequest, "malformed form")
+		return nil
+	}
+	taxonomy := ctx.Input("type")
+
+	records, err := m.svc.Reorder(ctx.Ctx(), m.subject(ctx.Request), taxonomy, ctx.Request.PostForm["id"])
+	if err != nil {
+		return m.answer(ctx, err)
+	}
+	if ctx.WantsJSON() {
+		return ctx.JSON(stdhttp.StatusOK, collectionFromPointers(records, ""))
+	}
+	return ctx.Redirect(m.orderingOf(taxonomy))
+}
+
+// move sends one record one step, or all the way, within its taxonomy.
+//
+// One route and one named direction rather than four routes. The four are the
+// same operation with a different neighbour, and four addresses for one
+// operation are four things to keep in step in the markup, the router and the
+// guides.
+func (m *Module) move(ctx *fhttp.Context) error {
+	actor := m.subject(ctx.Request)
+	id := ctx.Param("id")
+
+	var record *Tag
+	var err error
+	switch direction := ctx.Input("direction"); direction {
+	case "up":
+		record, err = m.svc.MoveUp(ctx.Ctx(), actor, id)
+	case "down":
+		record, err = m.svc.MoveDown(ctx.Ctx(), actor, id)
+	case "start":
+		record, err = m.svc.MoveToStart(ctx.Ctx(), actor, id)
+	case "end":
+		record, err = m.svc.MoveToEnd(ctx.Ctx(), actor, id)
+	default:
+		fhttp.Refuse(ctx.Response, ctx.Request, stdhttp.StatusUnprocessableEntity,
+			"direction is one of up, down, start, end")
+		return nil
+	}
+	if err != nil {
+		return m.answer(ctx, err)
+	}
+	if ctx.WantsJSON() {
+		return ctx.JSON(stdhttp.StatusOK, resourceFromPointer(record))
+	}
+	return ctx.Redirect(m.orderingOf(record.Type))
+}
+
+// listingOf and orderingOf are the addresses this module sends a browser back
+// to, built from the configured prefix rather than written out.
+func (m *Module) listingOf(taxonomy string) string {
+	return m.cfg.Prefix + "?type=" + url.QueryEscape(taxonomy)
+}
+
+func (m *Module) orderingOf(taxonomy string) string {
+	return m.cfg.Prefix + "/order?type=" + url.QueryEscape(taxonomy)
+}
+
+// locale is what the request asked to be answered in.
+//
+// It comes from the request's context, where the negotiation middleware left it.
+// An application that mounted none leaves it empty and the shipped locale is
+// what is drawn -- a screen in the wrong language is still a screen, and
+// refusing the request would be worse than answering it.
+func (m *Module) locale(r *stdhttp.Request) string { return translation.Locale(r.Context()) }
+
+// page is the chrome the application's layout draws around a screen.
+func (m *Module) page(ctx *fhttp.Context, title string) view.Page {
+	actor := m.subject(ctx.Request)
+	token, err := m.cfg.CSRF.Issue(m.sessions.IDFromRequest(ctx.Request))
+	if err != nil {
+		// An unissued token is left empty rather than reported. The page still
+		// renders and every form on it is refused, which is what a missing
+		// session means -- and the alternative, failing the read because the
+		// write would fail, is a blank screen where a sign-in prompt belongs.
+		token = ""
+	}
+	return view.Page{
+		Title:         title,
+		Token:         token,
+		Authenticated: actor.ID != "",
+		Path:          ctx.Request.URL.Path,
+	}
 }
 
 // subject reads who is acting from the session, and from nowhere else.
