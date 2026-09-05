@@ -1,8 +1,8 @@
 # Working on Arandu Tags
 
-This is an Arandu package: one entity with an embedded Hesape Model, one policy
-that decides about it, one service that owns the database handle, and the routes
-that reach them.
+This is an Arandu package: labels an application's entities carry, three
+entities with an embedded Hesape Model, one policy that decides about them, one
+service that owns the database handle, and the routes that reach the labels.
 It is a Go module somebody `go get`s and registers by hand in their own
 `bootstrap/app.go`, which is the whole difference from working in an
 application. There is no service provider, no container and no discovery — if a
@@ -62,20 +62,23 @@ this one must prove about itself it proves in its own suite or nowhere.
 
 | | measured with |
 | --- | --- |
-| 6 Go files, one per role, all in one package at the root | `grep -l '^package tags' *.go` |
-| 6 test files, 37 tests | `find tests -name '*_test.go'` · `go test -count=1 ./... -v \| grep -c '^--- PASS'` |
+| 8 Go files, one per role, all in one package at the root | `grep -l '^package tags' *.go` |
+| 12 test files, 66 tests | `ls *_test.go` · `find tests -name '*_test.go'` · `go test -count=1 ./... -v \| grep -c '^--- PASS'` |
+| 3 tables | `grep -c 'conn.Schema().Create' module.go` |
 | 3 routes | `grep -c 'r.Action' module.go` |
-| 5 actions the policy answers about | `grep -cE '^\t[A-Za-z]+ security.Action = ' policy.go` |
-| 2 direct dependencies, both under `arandu-io` | `go list -m -f '{{if and (not .Indirect) (not .Main)}}{{.Path}} {{.Version}}{{end}}' all` |
+| 7 actions the policy answers about | `grep -cE '^\t[A-Za-z]+ security.Action = ' policy.go` |
+| 3 direct dependencies, one of them reached only from tests | `go list -m -f '{{if and (not .Indirect) (not .Main)}}{{.Path}} {{.Version}}{{end}}' all` |
 
 The layout is by role rather than by layer, so the package reads top to bottom:
 
 ```
 module.go      registration, routes, handlers and migrations
 config.go      what the application passes in
-model.go       the entity, and what it may answer with
+model.go       the entities, and what they may answer with
+owner.go       how an entity says which kind it is
 policy.go      who may do what
 service.go     the rules and authorized Model access
+label.go       the label of a tag, in a locale
 views.go       the files the application takes ownership of
 ```
 
@@ -99,7 +102,7 @@ rejected in review. None of them is missing by accident.
 | a permit-all branch in the policy "for now" | nothing. The policy denies, and an action is opened by writing the rule that opens it |
 | an `interface{}` config, a map of options, an env var read at call time | the typed `Config` struct, validated by `New` |
 | a `panic` on bad wiring | an `error` from `New`. A wiring mistake found at boot costs one restart |
-| a third dependency | an argument, first. This module is imported into other people's builds |
+| a third dependency in the build | an argument, first. This module is imported into other people's builds. The SQLite driver is reached only from tests, which is the one form the argument survives |
 | a command of its own that copies files into a project | `Publishes()`, which declares a tagged tree and nothing more. `aru vendor:publish` asks the application which modules it registered and writes what each one declares, so one command serves every installed package instead of one command per package |
 
 ## The four properties

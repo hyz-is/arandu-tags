@@ -5,6 +5,7 @@ go 1.26
 require (
 	github.com/arandu-io/framework v0.46.0
 	github.com/arandu-io/hesape v0.25.1
+	modernc.org/sqlite v1.57.0
 )
 
 require (
@@ -18,5 +19,4 @@ require (
 	modernc.org/libc v1.74.4 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
-	modernc.org/sqlite v1.57.0 // indirect
 )

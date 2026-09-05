@@ -1,7 +1,8 @@
 # Arandu Tags
 
-An Arandu package. It registers its own routes, owns its own table, and decides
-for itself who may reach either.
+An Arandu package. It holds labels, records which of an application's entities
+carry them, registers its own routes, owns its own tables, and decides for
+itself who may reach any of it.
 
 ## Install
 
@@ -47,8 +48,9 @@ Then, once, before the application serves:
 aru migrate
 ```
 
-This package owns a table, which is why the migration step is not optional and
-why `arandu.mod.toml` says `migrations = true`.
+This package owns three tables -- `tags`, `taggables` and `tag_sequences` --
+which is why the migration step is not optional and why `arandu.mod.toml` says
+`migrations = true`.
 
 ## Publish the views
 
@@ -113,8 +115,17 @@ needed it.
 | `GET` | `/tags/{id}` | `tags.show` |
 | `POST` | `/tags` | `tags.store` |
 
+`index` and `store` read the taxonomy from `type`; leaving it out is the
+taxonomy with no name.
+
 Every one of them is refused until the policy is opened. That is the state the
 package ships in, and it is deliberate.
+
+The routes cover the labels and nothing else. Attaching a label to one of your
+entities is a Go call on `(*Module).Service()`, because whether a caller may tag
+an article is a question about the article, and the policy that answers it is
+yours. A route here would take a kind and an identifier from the request and tag
+whatever it was handed.
 
 ## Open the policy
 
@@ -130,6 +141,41 @@ this package needs, one action at a time, inside the custom block:
 ```
 
 What is not written there stays closed, including every action added later.
+
+## Declare the kind of the thing you tag
+
+An association names the entity on the other side by a kind its own domain
+declares, and never by the Go type of that entity. Declare it once, beside the
+entity:
+
+```go
+var ArticleType = tags.MustOwnerType("article", 1)
+```
+
+A Go type name changes when its package is renamed, moved into `internal/`,
+aliased or vendored, and none of those changes touch the rows already stored:
+every association would go on carrying the name reflection used to report, and
+nothing would say so. The version is there for the same reason pointed the other
+way -- when the meaning of a kind changes, bump it, and the associations written
+against the old one stay attached to the old one instead of claiming rows they
+were never about.
+
+Then tag something:
+
+```go
+	ref, err := tags.Ref(ArticleType, article.ID)
+	if err != nil {
+		return err
+	}
+	if err := module.Service().Attach(ctx, actor, ref, tagID); err != nil {
+		return err
+	}
+```
+
+`Detach`, `TagsOf`, `OwnersWithAnyTag`, `OwnersWithAllTags` and
+`OwnersWithoutAnyTag` are the rest of it. The last three answer with the
+identifiers of your entities, not with your rows: this package has never seen
+your table and is not going to guess at its schema.
 
 ## Model-first data path
 
@@ -156,9 +202,11 @@ report, export or raw SQL contract that the common Model path cannot express.
 ```
 module.go      registration, routes, handlers and migrations
 config.go      what the application passes in
-model.go       the entity, and what it may answer with
+model.go       the entities, and what they may answer with
+owner.go       how an entity says which kind it is
 policy.go      who may do what
 service.go     the rules and authorized Model access
+label.go       the label of a tag, in a locale
 views.go       the files the application takes ownership of
 ```
 

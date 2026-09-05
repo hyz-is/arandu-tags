@@ -10,6 +10,31 @@ a release is corrected by another release and never by moving a tag.
 
 ## [Unreleased]
 
+The entries below 0.4.0 are the template this package was cloned from. Nothing
+under this heading has been released yet.
+
+### Added
+
+- `Tag`, `Taggable` and the tables `tags`, `taggables` and `tag_sequences`.
+- `OwnerType` and `OwnerRef`, with `MustOwnerType`, `ParseOwnerType` and `Ref`.
+  The kind of entity on the other side of an association is declared by the
+  domain that owns it and never derived from a Go type.
+- `(*TagService).Attach`, `Detach`, `TagsOf`, `OwnersWithAnyTag`,
+  `OwnersWithAllTags`, `OwnersWithoutAnyTag`, `Rename` and `Move`.
+- `Label` and `LabelKey`, which read a tag's label out of the application's
+  translation catalogue and fall back to the name on the row.
+- `Slugify`, `ValidTaxonomy`, `DefaultTaxonomy` and `PositionStep`.
+- `TagAttach` and `TagDetach` beside the five actions the template shipped.
+- `(*Module).Service`, for an application that attaches from its own handler.
+- `ErrSlugTaken`, `ErrPositionUnavailable`, `ErrAlreadyAttached` and
+  `ErrNotAttached`.
+
+### Changed
+
+- `(*TagService).List` takes the taxonomy to list, before the query.
+- `CreateRequest` carries `Taxonomy`.
+- `Tag` carries `Type`, `Slug` and `Position` beside `Name`.
+
 ## [0.4.0] - 2026-09-05
 
 ### Added
