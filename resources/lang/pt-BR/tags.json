@@ -1,0 +1,68 @@
+{
+    "noun": {
+        "tag_one": "Etiqueta",
+        "tag_many": "Etiquetas",
+        "taxonomy_one": "Taxonomia",
+        "taxonomy_many": "Taxonomias",
+        "untyped": "Sem taxonomia"
+    },
+    "field": {
+        "name": "Nome",
+        "slug": "Slug",
+        "taxonomy": "Taxonomia",
+        "position": "Posição",
+        "created": "Criada em",
+        "search": "Buscar"
+    },
+    "control": {
+        "create": "Criar",
+        "save": "Salvar",
+        "cancel": "Cancelar",
+        "back": "Voltar",
+        "delete": "Excluir",
+        "edit": "Editar",
+        "order": "Reordenar",
+        "move_up": "Mover para cima",
+        "move_down": "Mover para baixo",
+        "move_to_start": "Mover para o início",
+        "move_to_end": "Mover para o fim",
+        "apply_order": "Salvar esta ordem",
+        "attach": "Vincular",
+        "detach": "Desvincular",
+        "name_placeholder": "A etiqueta como as pessoas vão ler",
+        "search_placeholder": "Buscar etiquetas",
+        "taxonomy_placeholder": "Deixe vazio para a taxonomia sem nome"
+    },
+    "screen": {
+        "index_title": "Etiquetas",
+        "index_lead": "As etiquetas desta taxonomia, na ordem em que são lidas.",
+        "index_empty": "Nenhuma etiqueta aqui ainda.",
+        "edit_title": "Editar etiqueta",
+        "edit_lead": "O nome muda. O slug não: outros sistemas já o anotaram.",
+        "order_title": "Ordem",
+        "order_lead": "Mova uma etiqueta com as setas, ou grave a ordem inteira de uma vez.",
+        "order_empty": "Não há nada para ordenar.",
+        "picker_title": "Etiquetas",
+        "picker_empty": "Isto ainda não carrega nenhuma etiqueta."
+    },
+    "message": {
+        "created": "A etiqueta foi criada.",
+        "renamed": "A etiqueta foi renomeada.",
+        "deleted": "A etiqueta e todos os vínculos com ela foram removidos.",
+        "reordered": "A ordem foi salva.",
+        "moved": "A etiqueta foi movida.",
+        "slug_taken": "Esta taxonomia já tem uma etiqueta com esse slug.",
+        "not_found": "Não existe essa etiqueta.",
+        "forbidden": "Você não pode fazer isso.",
+        "unavailable": "A ordem está ocupada. Tente de novo.",
+        "order_incomplete": "A ordem precisa nomear todas as etiquetas da taxonomia."
+    },
+    "command": {
+        "list": "lista as etiquetas de uma taxonomia",
+        "create": "cria uma etiqueta em uma taxonomia",
+        "rename": "renomeia uma etiqueta, sem mexer no slug",
+        "reorder": "grava uma ordem sobre toda a taxonomia",
+        "taxonomies": "lista as taxonomias em que um cliente tem etiquetas",
+        "prune": "relata as etiquetas que ninguém carrega, e apaga com --apply"
+    }
+}

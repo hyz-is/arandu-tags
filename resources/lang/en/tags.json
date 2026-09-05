@@ -1,0 +1,68 @@
+{
+    "noun": {
+        "tag_one": "Tag",
+        "tag_many": "Tags",
+        "taxonomy_one": "Taxonomy",
+        "taxonomy_many": "Taxonomies",
+        "untyped": "No taxonomy"
+    },
+    "field": {
+        "name": "Name",
+        "slug": "Slug",
+        "taxonomy": "Taxonomy",
+        "position": "Position",
+        "created": "Created",
+        "search": "Search"
+    },
+    "control": {
+        "create": "Create",
+        "save": "Save",
+        "cancel": "Cancel",
+        "back": "Back",
+        "delete": "Delete",
+        "edit": "Edit",
+        "order": "Reorder",
+        "move_up": "Move up",
+        "move_down": "Move down",
+        "move_to_start": "Move to start",
+        "move_to_end": "Move to end",
+        "apply_order": "Save this order",
+        "attach": "Attach",
+        "detach": "Detach",
+        "name_placeholder": "The label as people will read it",
+        "search_placeholder": "Search labels",
+        "taxonomy_placeholder": "Leave empty for the taxonomy with no name"
+    },
+    "screen": {
+        "index_title": "Tags",
+        "index_lead": "The labels this taxonomy holds, in the order they are read in.",
+        "index_empty": "No label here yet.",
+        "edit_title": "Edit tag",
+        "edit_lead": "The name changes. The slug does not: other systems have written it down.",
+        "order_title": "Order",
+        "order_lead": "Move a label with the arrows, or drop the whole order in one go.",
+        "order_empty": "There is nothing to order.",
+        "picker_title": "Labels",
+        "picker_empty": "This carries no label yet."
+    },
+    "message": {
+        "created": "The label was created.",
+        "renamed": "The label was renamed.",
+        "deleted": "The label and every association to it were removed.",
+        "reordered": "The order was saved.",
+        "moved": "The label was moved.",
+        "slug_taken": "This taxonomy already holds a label with that slug.",
+        "not_found": "There is no such label.",
+        "forbidden": "You may not do that.",
+        "unavailable": "The order is busy. Try again.",
+        "order_incomplete": "The order has to name every label of the taxonomy."
+    },
+    "command": {
+        "list": "list the labels of a taxonomy",
+        "create": "create a label in a taxonomy",
+        "rename": "rename a label, leaving its slug alone",
+        "reorder": "write one order over a whole taxonomy",
+        "taxonomies": "list the taxonomies a customer holds labels in",
+        "prune": "report the labels nothing carries, and delete them with --apply"
+    }
+}
