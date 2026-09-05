@@ -3,7 +3,9 @@ package tags
 import (
 	"context"
 	"fmt"
+	"math/rand/v2"
 	"slices"
+	"time"
 
 	"github.com/arandu-io/framework/data"
 	"github.com/arandu-io/framework/security"
@@ -38,7 +40,23 @@ const (
 	// another writer took the value it had read. Each attempt loses only to a
 	// claim that succeeded, so the loop ends as soon as this writer is the one
 	// that wins.
-	claimAttempts = 8
+	//
+	// It is a safety valve and not a tuning knob: with the backoff below, the
+	// wait before giving up is under a second, and a caller that is told to try
+	// again is better off than one held indefinitely on a counter it keeps
+	// losing.
+	claimAttempts = 64
+
+	// claimBackoff is how long a lost claim waits before reading again, and
+	// claimBackoffCap is as long as that wait ever gets.
+	//
+	// Waiting is what makes the retry bounded in practice. Without it every
+	// loser reads again immediately, so N writers on one counter take N turns
+	// each and the writer that wins last has lost N-1 times. Spreading them out
+	// in time leaves few enough contenders per round that each one wins within
+	// a handful.
+	claimBackoff    = 200 * time.Microsecond
+	claimBackoffCap = 5 * time.Millisecond
 )
 
 // sortableTag is the ordering allowlist. A column name taken directly
@@ -68,14 +86,19 @@ var sortableTag = map[string]string{
 // counter that hands out positions are one boundary: an association is only
 // meaningful about a label this tenant holds, and splitting them would put the
 // check that says so on the caller's side of the line.
+//
+// The policy is held as the contract rather than as the concrete type, and the
+// field is unexported, so the constructor below is the only place that says
+// which policy decides. There is no setter and no option: an application that
+// wants different rules edits TagPolicy, which is the one place rules live.
 type TagService struct {
 	db     *data.DB
-	policy TagPolicy
+	policy security.Policy[Tag]
 }
 
 // NewTagService wires the service over the application's database handle.
 func NewTagService(db *data.DB) *TagService {
-	return &TagService{db: db}
+	return &TagService{db: db, policy: TagPolicy{}}
 }
 
 // CreateRequest is the input contract.
@@ -668,8 +691,35 @@ func (s *TagService) claimPosition(ctx context.Context, g security.Grant, taxono
 		if changed == 1 {
 			return claimed, nil
 		}
+		if err := waitToClaimAgain(ctx, attempt); err != nil {
+			return 0, err
+		}
 	}
 	return 0, fmt.Errorf("%w: %d attempts on %q", ErrPositionUnavailable, claimAttempts, taxonomy)
+}
+
+// waitToClaimAgain pauses a claim that lost, for longer each time it loses.
+//
+// The pause is randomised across the interval rather than taken from it whole:
+// writers that lost the same round would otherwise wake together and contend
+// again as one crowd, which is the round they just lost repeated.
+//
+// It watches the context, so a request that was abandoned stops here instead of
+// sleeping out its remaining attempts.
+func waitToClaimAgain(ctx context.Context, attempt int) error {
+	window := claimBackoff << min(attempt, 8)
+	if window > claimBackoffCap {
+		window = claimBackoffCap
+	}
+	timer := time.NewTimer(time.Duration(rand.Int64N(int64(window)) + 1))
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 // seedSequence writes the counter row of a taxonomy that has none yet, and
