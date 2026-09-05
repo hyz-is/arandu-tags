@@ -452,23 +452,7 @@ func (s *TagService) Attach(ctx context.Context, actor security.Subject, ref Own
 	if carried {
 		return fmt.Errorf("%w: %s carries %s", ErrAlreadyAttached, ref, record.ID)
 	}
-
-	id, err := data.NewID()
-	if err != nil {
-		return err
-	}
-	instance, err := Taggables(s.db).NewInstance(nil, false)
-	if err != nil {
-		return err
-	}
-	link := instance.Entity
-	link.ID = id
-	link.TenantID = data.Tenant(g)
-	link.TagID = record.ID
-	link.OwnerType = ref.Type().String()
-	link.OwnerID = ref.ID()
-	_, err = link.Save(ctx, g)
-	return err
+	return s.writeLink(ctx, g, ref, record.ID)
 }
 
 // Detach takes a label back from an entity.
@@ -650,6 +634,13 @@ func (s *TagService) OwnersWithoutAnyTag(ctx context.Context, actor security.Sub
 }
 
 // claimPosition reserves the next position in one taxonomy.
+func (s *TagService) claimPosition(ctx context.Context, g security.Grant, taxonomy string) (int64, error) {
+	return s.claimPositions(ctx, g, taxonomy, 1)
+}
+
+// claimPositions reserves count consecutive positions in one taxonomy and
+// returns the first of them. They are PositionStep apart, so the caller writes
+// first, first+PositionStep, and so on.
 //
 // The value written is conditional on the value read. The update matches the
 // counter only while it still holds what the read returned, so a claim that
@@ -659,14 +650,22 @@ func (s *TagService) OwnersWithoutAnyTag(ctx context.Context, actor security.Sub
 // number, both write it, and the order those rows were meant to establish has
 // two of them in one place.
 //
+// A whole block is claimed in one turn of that loop rather than one position at
+// a time, so a caller placing many labels at once takes the counter once and the
+// positions it gets cannot be interleaved with another writer's.
+//
 // The counter row is created on the first claim of a taxonomy. Two callers can
 // both find it missing and both try to create it, and the loser is recognised
 // by asking the table rather than by reading the driver's error: a row that is
 // there now says the race happened and the claim goes on, and a row that is
 // still missing says the write failed for a reason this cannot fix.
-func (s *TagService) claimPosition(ctx context.Context, g security.Grant, taxonomy string) (int64, error) {
+func (s *TagService) claimPositions(ctx context.Context, g security.Grant, taxonomy string, count int) (int64, error) {
+	if count < 1 {
+		return 0, fmt.Errorf("tags: %d positions were claimed, and at least one has to be", count)
+	}
 	key := sequenceKey(data.Tenant(g), taxonomy)
 	counters := tagSequences(s.db)
+	width := int64(count) * PositionStep
 
 	for attempt := 0; attempt < claimAttempts; attempt++ {
 		counter, err := counters.NewQuery().WhereKey(key).First(ctx, g)
@@ -684,7 +683,7 @@ func (s *TagService) claimPosition(ctx context.Context, g security.Grant, taxono
 		changed, err := counters.NewQuery().
 			WhereKey(key).
 			Where("next_position", "=", claimed).
-			Update(ctx, g, map[string]any{"next_position": claimed + PositionStep})
+			Update(ctx, g, map[string]any{"next_position": claimed + width})
 		if err != nil {
 			return 0, err
 		}
