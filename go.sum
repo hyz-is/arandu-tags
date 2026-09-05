@@ -2,6 +2,8 @@ github.com/arandu-io/framework v0.46.0 h1:yy/uMGOiAWJGPAzK80TF6oALvCUA6McdO7LiKg
 github.com/arandu-io/framework v0.46.0/go.mod h1:NvrVhe8XGcyyGOkeh+UixZdl5vByfiIW+jlj592eIVY=
 github.com/arandu-io/hesape v0.25.1 h1:PLSc97yBVU0/B6ykDymA75oX8XKCPkzrvhI8xfp/KXw=
 github.com/arandu-io/hesape v0.25.1/go.mod h1:KNXJJuKrDIpWvJgNbE2LxtHkOqO4J6cqPkmMcNlxrL0=
+github.com/arandu-io/kyse v0.18.0 h1:swqDuWzRglV0YWVhd7YzqJlcFSCFRKUy4X2kZEs4qZg=
+github.com/arandu-io/kyse v0.18.0/go.mod h1:ARRYvVvSV1oaZ26k/6zOh2xbXYdj6nLe7GoZpbO3heY=
 github.com/dustin/go-humanize v1.0.1 h1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkpeCY=
 github.com/dustin/go-humanize v1.0.1/go.mod h1:Mu1zIs6XwVuF/gI1OepvI0qD18qycQx+mFykh5fBlto=
 github.com/google/pprof v0.0.0-20260802141513-ef3492d7dac3 h1:LMLX+LgTNWpfvCBdFebv6EsYotImrt/Ppc5cXIriCSo=
