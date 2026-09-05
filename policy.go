@@ -15,15 +15,20 @@ import (
 // where "view" on its own says nothing about what was viewed.
 const (
 	// TagView is reading one record.
-	TagView security.Action = "tags.view"
-	// TagList is paging through the records.
-	TagList security.Action = "tags.list"
+	TagView security.Action = "tag.view"
+	// TagList is paging through the records, and reading which entities carry
+	// which of them.
+	TagList security.Action = "tag.list"
 	// TagCreate is adding one.
-	TagCreate security.Action = "tags.create"
-	// TagUpdate is changing one.
-	TagUpdate security.Action = "tags.update"
-	// TagDelete is removing one.
-	TagDelete security.Action = "tags.delete"
+	TagCreate security.Action = "tag.create"
+	// TagUpdate is changing one, which includes moving it within its taxonomy.
+	TagUpdate security.Action = "tag.update"
+	// TagDelete is removing one, and with it every association to it.
+	TagDelete security.Action = "tag.delete"
+	// TagAttach is giving the tag to an entity.
+	TagAttach security.Action = "tag.attach"
+	// TagDetach is taking it back.
+	TagDetach security.Action = "tag.detach"
 )
 
 // TagPolicy is the only authority over who does what with a Tag.
@@ -47,6 +52,11 @@ var _ security.Policy[Tag] = TagPolicy{}
 //
 // It is the only place that decides. The service reaches the Model only after
 // Authorize turns this method's nil result into a Grant.
+//
+// Attaching and detaching are decided about the tag, because the tag is the
+// half of the association this package owns. Whether the subject may change
+// the entity on the other side is a question about that entity, and its own
+// policy is what answers it -- before this one is asked.
 func (TagPolicy) Can(ctx context.Context, s security.Subject, a security.Action, record Tag) error {
 	// Tenant isolation comes first and applies to every action. Without it every
 	// check below would be pointless in a multi-tenant system: a rule that
@@ -56,7 +66,7 @@ func (TagPolicy) Can(ctx context.Context, s security.Subject, a security.Action,
 	// The empty id is the candidate that has not been stored yet, which belongs
 	// to nobody until it is written with the tenant off the Grant.
 	if record.ID != "" && record.TenantID != s.Tenant {
-		return fmt.Errorf("tags belongs to another tenant")
+		return fmt.Errorf("tag belongs to another tenant")
 	}
 
 	// arandu:begin custom
@@ -71,10 +81,10 @@ func (TagPolicy) Can(ctx context.Context, s security.Subject, a security.Action,
 	// only subject that arrives without an id. Answer it explicitly or it falls
 	// through to the refusal below, which is the safe direction:
 	//
-	//	if a == TagView && s.IsGuest() && record.Published {
+	//	if a == TagList && s.IsGuest() {
 	//		return nil
 	//	}
 	// arandu:end custom
 
-	return fmt.Errorf("no rule allows %s on tags", a)
+	return fmt.Errorf("no rule allows %s on tag", a)
 }

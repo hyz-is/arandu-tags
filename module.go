@@ -1,20 +1,32 @@
-// Package tags is an Arandu module: one entity, one policy that decides
-// about it, one service that owns its Model-first data path, and the routes that
-// reach them.
+// Package tags is an Arandu module: labels an application's entities carry,
+// the association between the two, one policy that decides about them, one
+// service that owns their Model-first data path, and the routes that reach
+// them.
 //
 // The files are laid out by role rather than by layer, so the whole package
 // reads top to bottom:
 //
 //	module.go      -> registration, routes, handlers and migrations
 //	config.go      -> what the application passes in
-//	model.go       -> the entity, and what it may answer with
+//	model.go       -> the entities, and what they may answer with
+//	owner.go       -> how an entity says which kind it is
 //	policy.go      -> who may do what
 //	service.go     -> the rules and Model access, after authorization
+//	label.go       -> the label of a tag, in a locale
 //	views.go       -> the files the application takes ownership of
 //
 // An application registers it explicitly. There is no service provider, no
 // container and no discovery: the wiring is three lines somebody wrote, and
 // reading them is how they learn what the application is made of.
+//
+// # The routes cover the taxonomy, and the associations are a Go call
+//
+// The three routes list, read and create labels. Nothing here attaches a label
+// to an entity over HTTP, and that is deliberate: whether a caller may tag an
+// article is a question about the article, and the policy that answers it
+// belongs to whoever owns that table. An application attaches from its own
+// handler, where it has already asked. A route here would have to take the
+// entity's kind and identifier from the request and tag whatever it was given.
 package tags
 
 import (
@@ -39,7 +51,7 @@ import (
 // It implements foundation.Module, which is Name and Routes and nothing else --
 // that pair is the whole public contract between a package and the framework.
 //
-// It also implements foundation.Migratable, because it owns a table, and
+// It also implements foundation.Migratable, because it owns tables, and
 // foundation.Publishable, because it hands view sources to the project. The
 // other optional interfaces are declared beside Module in the framework and are
 // opted into the same way, by implementing them: Bootable to prepare state at
@@ -74,7 +86,7 @@ func New(cfg Config, db *data.DB, sessions *security.SessionStore) (*Module, err
 		return nil, err
 	}
 	if db == nil {
-		return nil, errors.New("tags: New needs a database handle: this package owns a table, and there is no in-memory mode that would let it start without one")
+		return nil, errors.New("tags: New needs a database handle: this package owns tables, and there is no in-memory mode that would let it start without one")
 	}
 	if sessions == nil {
 		return nil, errors.New("tags: New needs a session store: it is where the subject comes from, and a request with no subject cannot be authorized")
@@ -86,6 +98,14 @@ func New(cfg Config, db *data.DB, sessions *security.SessionStore) (*Module, err
 		sessions: sessions,
 	}, nil
 }
+
+// Service is the Go API of this package, for an application that attaches
+// labels from its own handlers.
+//
+// It is the same service the routes below call. There is one of it, holding one
+// database handle, so a label written through a route and a label read through
+// a call are the same rows decided by the same policy.
+func (m *Module) Service() *TagService { return m.svc }
 
 // Name is the module identifier: a lowercase slug, stable, no spaces.
 //
@@ -173,7 +193,7 @@ func (m *Module) Boot(context.Context) error {
 // reached data directly would skip the service's policy boundary, and the
 // layout makes that visible rather than relying on review.
 
-// index answers a page of records.
+// index answers a page of one taxonomy.
 func (m *Module) index(ctx *fhttp.Context) error {
 	query := data.Query{
 		Sort:   ctx.Query("sort"),
@@ -181,7 +201,7 @@ func (m *Module) index(ctx *fhttp.Context) error {
 		Limit:  m.cfg.PageSize,
 	}
 
-	records, err := m.svc.List(ctx.Ctx(), m.subject(ctx.Request), query)
+	records, err := m.svc.List(ctx.Ctx(), m.subject(ctx.Request), ctx.Query("type"), query)
 	if err != nil {
 		return m.answer(ctx, err)
 	}
@@ -207,7 +227,7 @@ func (m *Module) show(ctx *fhttp.Context) error {
 
 // store creates one record.
 func (m *Module) store(ctx *fhttp.Context) error {
-	in := CreateRequest{Name: ctx.Input("name")}
+	in := CreateRequest{Name: ctx.Input("name"), Taxonomy: ctx.Input("type")}
 
 	record, err := m.svc.Create(ctx.Ctx(), m.subject(ctx.Request), in)
 	if err != nil {
@@ -238,7 +258,7 @@ func (m *Module) subject(r *stdhttp.Request) security.Subject {
 
 // answer turns what the service refused into something the client can act on.
 //
-// Three refusals have an answer, and everything else does not. An error this
+// Four refusals have an answer, and everything else does not. An error this
 // package did not expect is returned rather than swallowed: the framework turns
 // it into the error page in development and a 500 in production, which is the
 // honest outcome. Answering 200 with an empty body is the failure nobody
@@ -248,6 +268,10 @@ func (m *Module) subject(r *stdhttp.Request) security.Subject {
 // policy said no is telling them what exists and what does not, one request at
 // a time; the reason is in the log, where the person operating the system reads
 // it and the person probing it does not.
+//
+// A taken slug and an unclaimable position both mean the write did not happen,
+// and they are answered apart because what the client should do differs: one is
+// settled until the name changes, and the other is the same request made again.
 func (m *Module) answer(ctx *fhttp.Context, err error) error {
 	switch {
 	case errors.Is(err, security.ErrForbidden):
@@ -255,6 +279,12 @@ func (m *Module) answer(ctx *fhttp.Context, err error) error {
 		return nil
 	case errors.Is(err, ErrNotFound):
 		fhttp.Refuse(ctx.Response, ctx.Request, stdhttp.StatusNotFound, "not found")
+		return nil
+	case errors.Is(err, ErrSlugTaken):
+		fhttp.Refuse(ctx.Response, ctx.Request, stdhttp.StatusConflict, "conflict")
+		return nil
+	case errors.Is(err, ErrPositionUnavailable):
+		fhttp.Refuse(ctx.Response, ctx.Request, stdhttp.StatusServiceUnavailable, "unavailable")
 		return nil
 	}
 
@@ -273,48 +303,106 @@ func (m *Module) answer(ctx *fhttp.Context, err error) error {
 // They are returned in the order their names sort in, which is the order they
 // apply in: the name carries the order, and nothing else decides it.
 func (m *Module) Migrations() []foundation.Migration {
-	return []foundation.Migration{createTags{}}
+	return []foundation.Migration{createTagTables{}}
 }
 
 // The migration is reversible, and the assertion is here rather than discovered
 // at rollback: the migrator tests for Down with a type assertion, so a Down
 // with the wrong signature would leave a rollback that silently does nothing.
-var _ migrations.ReversibleMigration = createTags{}
+var _ migrations.ReversibleMigration = createTagTables{}
 
-// createTags is the table this module owns, and the index its listing
-// reads by.
-type createTags struct{ migrations.BaseMigration }
+// createTagTables is the schema this module owns: the labels, the associations
+// and the counter that hands out an order.
+//
+// One migration rather than three, because the three tables are one thing: a
+// counter without labels counts nothing, and an association without both ends
+// names nothing. An installer that applied one of the three would have a
+// package that cannot answer a single call.
+type createTagTables struct{ migrations.BaseMigration }
 
 // GetName is the migration's identity, and it carries the order. It is fixed
 // once the package is published: changing what an applied name means leaves the
 // change missing everywhere it already ran, and nothing says so.
-func (createTags) GetName() string { return "20260823_0001_create_tags" }
+func (createTagTables) GetName() string { return "20260905_0001_create_tag_tables" }
 
-// Up creates the table and the index the keyset pagination scans.
+// Up creates the three tables, the indexes their queries read by, and the two
+// unique constraints that hold the invariants the code depends on.
 //
 // The Blueprint spells each column for the engine the migration is running on,
 // which is what lets one application develop on a file and deploy on Postgres
-// without a second schema. That used to be written out as SQL here, with a
-// comment explaining that an identifier column is VARCHAR rather than TEXT
-// because it takes part in a key and MySQL refuses TEXT in one without a prefix
-// length -- which is the grammar's job, done by hand in every migration that
-// remembered to.
+// without a second schema.
 //
-// The timestamp has no database default: the value comes from Go.
-func (createTags) Up(ctx context.Context, conn migrations.Connection) error {
-	return conn.Schema().Create(ctx, "tags", func(table *schema.Blueprint) {
+// The timestamps have no database default: the values come from Go.
+func (createTagTables) Up(ctx context.Context, conn migrations.Connection) error {
+	err := conn.Schema().Create(ctx, TagTable, func(table *schema.Blueprint) {
 		table.String("id").Primary()
 		table.String("tenant_id")
+		// Not nullable, and the taxonomy with no name is the empty string. Two
+		// nulls do not compare equal in SQL, so a nullable discriminator would
+		// take the untyped labels out of both unique indexes below -- which is
+		// where a taxonomy would quietly grow two labels with one slug.
+		table.String("type").Default("")
 		table.String("name")
+		table.String("slug")
+		table.BigInteger("position")
+		table.Timestamp("created_at")
+		table.Timestamp("updated_at")
+
+		// A slug is how a label is addressed, so a taxonomy holds each one
+		// once.
+		table.Unique([]string{"tenant_id", "type", "slug"}, "tags_tenant_type_slug_uniq")
+		// The order is total, and this is where that is true rather than
+		// hoped for: the claim that hands out positions is what avoids the
+		// collision, and this is what says so if it ever stops working.
+		// It is also the index the listing's ORDER BY reads.
+		table.Unique([]string{"tenant_id", "type", "position"}, "tags_tenant_type_position_uniq")
+	})
+	if err != nil {
+		return err
+	}
+
+	err = conn.Schema().Create(ctx, TaggableTable, func(table *schema.Blueprint) {
+		table.String("id").Primary()
+		table.String("tenant_id")
+		table.String("tag_id")
+		table.String("owner_type")
+		table.String("owner_id")
 		table.Timestamp("created_at")
 
-		// The index matches the ORDER BY of the listing, tenant first. Without
-		// it every page is a scan of every customer's rows.
-		table.Index([]string{"tenant_id", "created_at", "id"}, "tags_tenant_created_idx")
+		// An entity carries a label once. Attaching it twice is a caller that
+		// asked twice, not a second association.
+		table.Unique([]string{"tenant_id", "tag_id", "owner_type", "owner_id"}, "taggables_tenant_tag_owner_uniq")
+		// The labels one entity carries.
+		table.Index([]string{"tenant_id", "owner_type", "owner_id"}, "taggables_tenant_owner_idx")
+		// The entities carrying one label, and the grouping that counts how
+		// many of a set each of them carries.
+		table.Index([]string{"tenant_id", "owner_type", "tag_id", "owner_id"}, "taggables_tenant_type_tag_idx")
+	})
+	if err != nil {
+		return err
+	}
+
+	// One row per tenant and taxonomy, addressed by the pair, so a claim reads
+	// by key. There is no index beside the primary one: nothing queries this
+	// table by anything else.
+	return conn.Schema().Create(ctx, tagSequenceTable, func(table *schema.Blueprint) {
+		table.String("id").Primary()
+		table.String("tenant_id")
+		table.String("type").Default("")
+		table.BigInteger("next_position")
 	})
 }
 
-// Down drops the table, which takes its index with it.
-func (createTags) Down(ctx context.Context, conn migrations.Connection) error {
-	return conn.Schema().DropIfExists(ctx, "tags")
+// Down drops the tables, which takes their indexes with them.
+//
+// In the reverse order of Up, so that a rollback reads as the undo of what was
+// read going forward.
+func (createTagTables) Down(ctx context.Context, conn migrations.Connection) error {
+	if err := conn.Schema().DropIfExists(ctx, tagSequenceTable); err != nil {
+		return err
+	}
+	if err := conn.Schema().DropIfExists(ctx, TaggableTable); err != nil {
+		return err
+	}
+	return conn.Schema().DropIfExists(ctx, TagTable)
 }

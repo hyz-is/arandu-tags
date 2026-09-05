@@ -3,6 +3,9 @@ package unit_test
 import (
 	"context"
 	"errors"
+	"reflect"
+	"slices"
+	"sort"
 	"strings"
 	"testing"
 
@@ -35,6 +38,24 @@ var everyAction = []security.Action{
 	tags.TagCreate,
 	tags.TagUpdate,
 	tags.TagDelete,
+	tags.TagAttach,
+	tags.TagDetach,
+}
+
+// articleType is the kind an application's own entity would declare. It is
+// written out here the way an application writes it: a name it chose and a
+// version it will change when the meaning of the kind does.
+var articleType = tags.MustOwnerType("article", 1)
+
+// articleRef is one entity of that kind.
+func articleRef(t *testing.T) tags.OwnerRef {
+	t.Helper()
+
+	ref, err := tags.Ref(articleType, "article-1")
+	if err != nil {
+		t.Fatalf("building the reference: %v", err)
+	}
+	return ref
 }
 
 // administrator is the most privileged subject an application can produce. It
@@ -117,15 +138,68 @@ func TestTheServiceRefusesBeforeReachingTheModel(t *testing.T) {
 	// not only its terminal -- ahead of authorization.
 	service := tags.NewTagService(nil)
 	ctx := context.Background()
+	ref := articleRef(t)
+	ids := []string{"record-1"}
 
-	if _, err := service.Find(ctx, administrator(), "record-1"); !errors.Is(err, security.ErrForbidden) {
-		t.Fatalf("Find reached the Model before the policy refusal: %v", err)
+	// Every exported use case, not the three the template shipped with: a
+	// method left out of this list is a method whose refusal nobody checked.
+	for name, call := range map[string]func() error{
+		"Find": func() error { _, err := service.Find(ctx, administrator(), "record-1"); return err },
+		"List": func() error { _, err := service.List(ctx, administrator(), "", data.Query{}); return err },
+		"Create": func() error {
+			_, err := service.Create(ctx, administrator(), tags.CreateRequest{Name: "one"})
+			return err
+		},
+		"Rename": func() error {
+			_, err := service.Rename(ctx, administrator(), "record-1", tags.RenameRequest{Name: "one"})
+			return err
+		},
+		"Move":   func() error { _, err := service.Move(ctx, administrator(), "record-1", 1); return err },
+		"Delete": func() error { return service.Delete(ctx, administrator(), "record-1") },
+		"Attach": func() error { return service.Attach(ctx, administrator(), ref, "record-1") },
+		"Detach": func() error { return service.Detach(ctx, administrator(), ref, "record-1") },
+		"TagsOf": func() error { _, err := service.TagsOf(ctx, administrator(), ref); return err },
+		"OwnersWithAnyTag": func() error {
+			_, err := service.OwnersWithAnyTag(ctx, administrator(), articleType, ids)
+			return err
+		},
+		"OwnersWithAllTags": func() error {
+			_, err := service.OwnersWithAllTags(ctx, administrator(), articleType, ids)
+			return err
+		},
+		"OwnersWithoutAnyTag": func() error {
+			_, err := service.OwnersWithoutAnyTag(ctx, administrator(), articleType, ids, ids)
+			return err
+		},
+	} {
+		if err := call(); !errors.Is(err, security.ErrForbidden) {
+			t.Errorf("%s reached the Model before the policy refusal: %v", name, err)
+		}
 	}
-	if _, err := service.List(ctx, administrator(), data.Query{}); !errors.Is(err, security.ErrForbidden) {
-		t.Fatalf("List reached the Model before the policy refusal: %v", err)
+}
+
+// TestEveryExportedServiceMethodIsRefused counts what the map above holds
+// against what the type declares, so a use case added without a refusal of its
+// own is a failure rather than a silence.
+func TestEveryExportedServiceMethodIsRefused(t *testing.T) {
+	t.Parallel()
+
+	// Reflection over the pointer type, because that is what the constructor
+	// returns and what an application holds.
+	service := reflect.TypeOf(tags.NewTagService(nil))
+	declared := make([]string, 0, service.NumMethod())
+	for i := 0; i < service.NumMethod(); i++ {
+		declared = append(declared, service.Method(i).Name)
 	}
-	if _, err := service.Create(ctx, administrator(), tags.CreateRequest{Name: "one"}); !errors.Is(err, security.ErrForbidden) {
-		t.Fatalf("Create reached the Model before the policy refusal: %v", err)
+	sort.Strings(declared)
+
+	want := []string{
+		"Attach", "Create", "Delete", "Detach", "Find", "List", "Move",
+		"OwnersWithAllTags", "OwnersWithAnyTag", "OwnersWithoutAnyTag",
+		"Rename", "TagsOf",
+	}
+	if !slices.Equal(declared, want) {
+		t.Fatalf("the service declares %v; the refusal test covers %v. Add the new method there before adding it here", declared, want)
 	}
 }
 

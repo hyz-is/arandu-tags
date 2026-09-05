@@ -180,9 +180,16 @@ func TestEveryServiceMethodAuthorizesBeforeTheModel(t *testing.T) {
 }
 
 // firstModelReach is where a Service first constructs the configured Model or
-// calls a promoted write terminal. Tags itself counts: moving only its
-// construction before Authorize is the mutation this audit exists to reject.
+// calls a promoted write terminal. Constructing one counts: moving only that
+// call before Authorize is the mutation this audit exists to reject.
+//
+// All three entry points are named. A Service that authorized before touching
+// the labels and then reached the associations or the position counter first
+// would pass an audit that knew about one of them.
 func firstModelReach(body *ast.BlockStmt) token.Pos {
+	entryPoints := map[string]bool{
+		"Tags": true, "Taggables": true, "tagSequences": true,
+	}
 	terminals := map[string]bool{
 		"Save": true, "Delete": true, "Restore": true, "Touch": true,
 	}
@@ -193,7 +200,7 @@ func firstModelReach(body *ast.BlockStmt) token.Pos {
 			return true
 		}
 		name := calledName(call)
-		if name != "Tags" && !terminals[name] {
+		if !entryPoints[name] && !terminals[name] {
 			return true
 		}
 		if found == token.NoPos || call.Pos() < found {

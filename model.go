@@ -2,13 +2,66 @@ package tags
 
 import (
 	"errors"
+	"strconv"
+	"strings"
 	"time"
+	"unicode"
 
 	"github.com/arandu-io/framework/data"
 	"github.com/arandu-io/hesape/database/model"
 )
 
-// Tag is the entity this package owns.
+// The names of the tables this package owns. They are constants because each
+// one is written in a migration, in a model and in a test, and three spellings
+// of one table disagree on the day one of them is changed.
+const (
+	// TagTable holds the labels themselves.
+	TagTable = "tags"
+	// TaggableTable holds which entity carries which label.
+	TaggableTable = "taggables"
+	// tagSequenceTable holds the next position to hand out per taxonomy. It is
+	// not part of the API: it is how ordering is claimed, and a caller that
+	// wrote to it would be choosing positions the claim believes are free.
+	tagSequenceTable = "tag_sequences"
+)
+
+// The shape a taxonomy name is held to, and the taxonomy a tag belongs to when
+// the caller names none.
+const (
+	// MaxTaxonomyLen is the longest a taxonomy name may be.
+	MaxTaxonomyLen = 64
+	// DefaultTaxonomy is where a tag lands when no taxonomy is named. It is the
+	// empty string rather than a null: the column takes part in two unique
+	// indexes, and two nulls do not compare equal, so a nullable discriminator
+	// would let one taxonomy hold the same slug twice.
+	DefaultTaxonomy = ""
+)
+
+// ValidTaxonomy reports whether a string can name a taxonomy.
+//
+// The empty string can: it is DefaultTaxonomy. Anything else is held to the
+// shape an owner kind's name is held to, so the two discriminators this
+// package stores read the same way.
+func ValidTaxonomy(taxonomy string) bool {
+	if taxonomy == DefaultTaxonomy {
+		return true
+	}
+	if len(taxonomy) > MaxTaxonomyLen {
+		return false
+	}
+	for i := 0; i < len(taxonomy); i++ {
+		c := taxonomy[i]
+		lower := c >= 'a' && c <= 'z'
+		digit := c >= '0' && c <= '9'
+		punctuation := c == '-' || c == '_'
+		if !lower && !digit && !punctuation || (i == 0 && !lower) {
+			return false
+		}
+	}
+	return true
+}
+
+// Tag is a label an application's entities can carry.
 //
 // It embeds the model, so a row returned by a query carries the connection and
 // can be saved again. Build new rows through Tags: a struct literal has no
@@ -26,11 +79,29 @@ type Tag struct {
 	// tenant.
 	TenantID string `db:"tenant_id"`
 
-	// Name is what a person calls this record.
+	// Type is the taxonomy this label belongs to. One table serves as many
+	// taxonomies as an application has, and two tags with the same slug in two
+	// taxonomies are two tags.
+	Type string `db:"type"`
+
+	// Name is the label as whoever created it wrote it.
 	Name string `db:"name"`
+
+	// Slug is the label reduced to something addressable, unique within its
+	// taxonomy. It is derived from Name once, at creation, and is what a
+	// caller looks a tag up by when it does not hold the identifier.
+	Slug string `db:"slug"`
+
+	// Position is where this label sorts within its taxonomy. It is claimed
+	// rather than computed from the rows already there, and no two labels of
+	// one taxonomy hold the same one.
+	Position int64 `db:"position"`
 
 	// CreatedAt is when the row was written, in UTC.
 	CreatedAt time.Time `db:"created_at"`
+
+	// UpdatedAt is when the row was last written, in UTC.
+	UpdatedAt time.Time `db:"updated_at"`
 }
 
 // Tags returns the configured model for the tags table.
@@ -38,15 +109,139 @@ type Tag struct {
 // The primary key is application-generated text, so it does not increment.
 // The tenant scope remains on the model's tenant_id default.
 func Tags(db *data.DB) *model.Model[Tag] {
-	m := model.NewModel[Tag]("tags", db, db.GetQueryGrammar(), db.GetPostProcessor())
+	m := model.NewModel[Tag](TagTable, db, db.GetQueryGrammar(), db.GetPostProcessor())
 	m.KeyType = "string"
 	m.Incrementing = false
 	return m
 }
 
-// ErrNotFound is returned when no row matches, including when the row exists
-// in another tenant. The two cases are deliberately indistinguishable.
-var ErrNotFound = errors.New("tags: record not found")
+// Taggable is one entity carrying one label.
+//
+// The entity is named by the kind its own domain declared and by its
+// identifier within that kind. Neither is a Go type: this package never loads
+// the row on the other side, and could not, because the table it lives in
+// belongs to the application rather than here.
+type Taggable struct {
+	model.Model[Taggable]
+
+	// ID is the identifier of the association itself.
+	ID string `db:"id"`
+
+	// TenantID is the customer the association belongs to.
+	TenantID string `db:"tenant_id"`
+
+	// TagID is the label being carried.
+	TagID string `db:"tag_id"`
+
+	// OwnerType is the kind of entity carrying it, as OwnerType.String wrote
+	// it.
+	OwnerType string `db:"owner_type"`
+
+	// OwnerID is that entity's identifier within its kind.
+	OwnerID string `db:"owner_id"`
+
+	// CreatedAt is when the association was written, in UTC.
+	CreatedAt time.Time `db:"created_at"`
+}
+
+// Taggables returns the configured model for the taggables table.
+func Taggables(db *data.DB) *model.Model[Taggable] {
+	m := model.NewModel[Taggable](TaggableTable, db, db.GetQueryGrammar(), db.GetPostProcessor())
+	m.KeyType = "string"
+	m.Incrementing = false
+	return m
+}
+
+// tagSequence is the next position to hand out in one taxonomy.
+//
+// One row per tenant and taxonomy, and its identifier is the pair, so the row
+// a claim needs is addressed by key rather than searched for.
+type tagSequence struct {
+	model.Model[tagSequence]
+
+	// ID is the tenant and the taxonomy, joined.
+	ID string `db:"id"`
+
+	// TenantID is the customer the counter belongs to.
+	TenantID string `db:"tenant_id"`
+
+	// Type is the taxonomy the counter counts.
+	Type string `db:"type"`
+
+	// NextPosition is the position the next claim takes.
+	NextPosition int64 `db:"next_position"`
+}
+
+// tagSequences returns the configured model for the counter table.
+func tagSequences(db *data.DB) *model.Model[tagSequence] {
+	m := model.NewModel[tagSequence](tagSequenceTable, db, db.GetQueryGrammar(), db.GetPostProcessor())
+	m.KeyType = "string"
+	m.Incrementing = false
+	// The row carries no time: it is a counter, and when it last moved says
+	// nothing anybody reads.
+	m.Timestamps = false
+	return m
+}
+
+// sequenceKey is the identifier of the counter for one taxonomy.
+//
+// The two halves are joined by a character neither may hold -- a tenant and a
+// taxonomy are lowercase letters, digits, - and _ -- so one pair produces one
+// key and no pair produces another pair's.
+func sequenceKey(tenant, taxonomy string) string { return tenant + ":" + taxonomy }
+
+// The errors this package answers with, rather than sentences a caller has to
+// match on.
+var (
+	// ErrNotFound is returned when no row matches, including when the row
+	// exists in another tenant. The two cases are deliberately
+	// indistinguishable.
+	ErrNotFound = errors.New("tags: record not found")
+
+	// ErrSlugTaken is returned when a taxonomy already holds a label with the
+	// slug a name reduces to.
+	ErrSlugTaken = errors.New("tags: the taxonomy already holds this slug")
+
+	// ErrPositionUnavailable is returned when a position could not be claimed
+	// because other writers kept taking the one this claim had read. It is
+	// exhaustion of a bounded retry, not a refusal: the same call made again
+	// is expected to succeed.
+	ErrPositionUnavailable = errors.New("tags: no position could be claimed")
+
+	// ErrAlreadyAttached is returned when the entity already carries the label.
+	ErrAlreadyAttached = errors.New("tags: the entity already carries this tag")
+
+	// ErrNotAttached is returned when the entity does not carry the label.
+	ErrNotAttached = errors.New("tags: the entity does not carry this tag")
+)
+
+// Slugify reduces a label to the form stored in Slug.
+//
+// Letters and digits are kept, lowercased, and everything between them becomes
+// a single hyphen. Letters outside ASCII are kept as letters rather than
+// dropped: a taxonomy written in a language this package has never heard of
+// still produces a slug that distinguishes its labels, which is the whole job
+// of the column.
+//
+// It is exported because it decides whether two names are the same label, and
+// a caller that has to know the answer before writing should be able to ask.
+func Slugify(name string) string {
+	var b strings.Builder
+	b.Grow(len(name))
+	pendingSeparator := false
+	for _, r := range name {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			if pendingSeparator && b.Len() > 0 {
+				b.WriteByte('-')
+			}
+			pendingSeparator = false
+			b.WriteRune(unicode.ToLower(r))
+			continue
+		}
+		pendingSeparator = true
+	}
+	return b.String()
+}
 
 // Resource is the list of fields one Tag is allowed to answer with.
 //
@@ -56,31 +251,37 @@ var ErrNotFound = errors.New("tags: record not found")
 // field: it names another customer's identifier and belongs in no response.
 type Resource struct {
 	id        string
+	taxonomy  string
 	name      string
+	slug      string
+	position  int64
 	createdAt time.Time
 }
 
 // NewResource snapshots one record for the response.
 func NewResource(record Tag) Resource {
-	return newResource(record.ID, record.Name, record.CreatedAt)
+	return newResource(record.ID, record.Type, record.Name, record.Slug, record.Position, record.CreatedAt)
 }
 
 func resourceFromPointer(record *Tag) Resource {
 	if record == nil {
 		return Resource{}
 	}
-	return newResource(record.ID, record.Name, record.CreatedAt)
+	return newResource(record.ID, record.Type, record.Name, record.Slug, record.Position, record.CreatedAt)
 }
 
-func newResource(id, name string, createdAt time.Time) Resource {
-	return Resource{id: id, name: name, createdAt: createdAt}
+func newResource(id, taxonomy, name, slug string, position int64, createdAt time.Time) Resource {
+	return Resource{id: id, taxonomy: taxonomy, name: name, slug: slug, position: position, createdAt: createdAt}
 }
 
 // ToArray returns the fields that may leave, by name.
 func (r Resource) ToArray() map[string]any {
 	return map[string]any{
 		"id":         r.id,
+		"type":       r.taxonomy,
 		"name":       r.name,
+		"slug":       r.slug,
+		"position":   strconv.FormatInt(r.position, 10),
 		"created_at": r.createdAt.UTC().Format(time.RFC3339),
 	}
 }
