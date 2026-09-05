@@ -92,14 +92,30 @@ wrote and did not get is worse than a number somebody wrote and was told about.
 | method | path | name |
 | --- | --- | --- |
 | `GET` | `/tags` | `tags.index` |
-| `GET` | `/tags/{id}` | `tags.show` |
 | `POST` | `/tags` | `tags.store` |
+| `GET` | `/tags/order` | `tags.order` |
+| `POST` | `/tags/order` | `tags.reorder` |
+| `GET` | `/tags/{id}` | `tags.show` |
+| `PATCH` | `/tags/{id}` | `tags.update` |
+| `DELETE` | `/tags/{id}` | `tags.destroy` |
+| `POST` | `/tags/{id}/move` | `tags.move` |
+
+The table lives in one place, `routePatterns` in `config.go`, and is read twice:
+by `Validate`, which registers it on a throwaway mux to find out whether the
+standard library takes the prefix, and by `Routes`, which registers it for real.
+Adding a route means adding a line there and a handler in the map in `Routes` —
+never a second `r.Action` written on its own, which would be a route the
+configuration was never checked against.
 
 Build URLs from the names, never by writing the path a second time. `aru
 route:list` shows them grouped by module. Under a custom `Prefix` the paths move
 and the names do not.
 
-`GET /tags` answers `{"data": {"items": [...]}}`, and adds
+Every one of them answers twice over. `ctx.WantsJSON()` decides — the
+framework's own question, so this package invents no second rule — and htmx is
+on the screen side of it, because it swaps markup.
+
+`GET /tags` as JSON answers `{"data": {"items": [...]}}`, and adds
 `"next_cursor"` beside `data` when a further page exists. Pass it back as
 `?cursor=`. A page shorter than `PageSize` is the last one and carries no
 cursor.

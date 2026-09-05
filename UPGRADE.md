@@ -1,5 +1,77 @@
 # Upgrade Guide
 
+## Unreleased
+
+Everything under this heading is additive except three things, and each of the
+three fails loudly rather than quietly.
+
+### `Config.CSRF` is required
+
+```go
+// Before.
+tags.New(tags.Config{Tenant: cfg.Auth.Tenant}, db, sessions)
+
+// After.
+tags.New(tags.Config{Tenant: cfg.Auth.Tenant, CSRF: csrf}, db, sessions)
+```
+
+`New` refuses a configuration without it, at the line that wires the module.
+Every screen this package now draws writes, and a page rendered without a token
+is a page whose buttons the application refuses -- which is a form that does
+nothing, discovered by whoever clicks it.
+
+### A browser gets markup where it used to get JSON
+
+The routes answer in two shapes, chosen by `ctx.WantsJSON()` -- the framework's
+own question. A client that sends `Accept: application/json` gets exactly the
+body it got before, on the same addresses. A browser, or anything sending no
+`Accept` header at all, now gets the screen.
+
+If you were calling these routes from a program without that header, add it.
+There is no flag and no second address: two spellings of one route disagree.
+
+### `(*TagService).Move` accepts a negative position
+
+It used to refuse one. The order is a total order over signed integers: the
+first claim of a taxonomy lands on zero, so `MoveToStart` on the first label has
+to land below it. Keeping zero as a floor would mean renumbering the taxonomy to
+open room at the front, which is the work sparse positions exist to avoid.
+
+Nothing that worked before stops working. A caller that only ever passed
+non-negative positions is unaffected.
+
+### Write the policy in your application
+
+`TagPolicy` still denies everything and is still what a wiring that says nothing
+about rules gets. What is new is that you can replace it without forking the
+package:
+
+```go
+	tags.Config{
+		Tenant: cfg.Auth.Tenant,
+		CSRF:   csrf,
+		Policy: TagRules{},
+	}
+```
+
+`Config.Policy` is optional and nil is the shipped refusal. There is still one
+policy and one place it is consulted.
+
+### The new surface
+
+`AttachTags`, `DetachTags`, `DetachAllTags`, `SyncTags`, `SyncTagsOfTaxonomy`,
+`HasTag`, `TagsOfTaxonomy`, `OwnersWithAnyTagOfTaxonomy`, `FindByName`,
+`FindManyByName`, `FindInAnyTaxonomy`, `FindOrCreate`, `Search`, `Taxonomies`,
+`UnusedTags`, `Reorder`, `MoveUp`, `MoveDown`, `MoveToStart`, `MoveToEnd` and
+`SwapOrder` are all new. Nothing was removed and nothing changed signature.
+
+`Commands(Deps)` returns the six commands; append them to the slice your console
+kernel dispatches. `(*Module).Labels(locale)` is the catalogue. The screens are
+published the way the single one always was, and there are four of them now, so
+run `aru vendor:publish --tag=view --apply` and `aru view:build` again after
+upgrading -- `Boot` refuses to serve until every one of them is linked, and the
+refusal names the ones that are missing.
+
 ## v0.4.0
 
 Version 0.4.0 hands publishing to the framework. The package no longer defines

@@ -39,9 +39,32 @@ also takes `g`.
 
 ## The procedure
 
-**1. Write the rule inside the custom block.**
+**1. Decide where the rule belongs, then write it.**
 
-`policy.go` has one:
+There are two places and they are not alternatives.
+
+An application that **installed** this package cannot edit `policy.go`, so its
+rules go in its own code and reach the module through `Config.Policy`:
+
+```go
+type TagRules struct{}
+
+func (TagRules) Can(_ context.Context, s security.Subject, a security.Action, record tags.Tag) error {
+	if record.ID != "" && record.TenantID != s.Tenant {
+		return fmt.Errorf("the tag belongs to another tenant")
+	}
+	if !s.HasRole(string(a)) {
+		return fmt.Errorf("the subject does not carry %s", a)
+	}
+	return nil
+}
+```
+
+The tenant comparison is the line to keep whatever else is written. Nil is
+`TagPolicy`, which denies everything, so a wiring that says nothing gets nothing.
+
+Working **inside this repository**, the rule goes in the custom block of
+`policy.go`:
 
 ```go
 	// arandu:begin custom
@@ -56,6 +79,8 @@ nothing and buy one thing: the same policy regenerated inside an application
 keeps what is between them. `aru make:module --force` says so itself —
 *"whatever sits between the arandu:begin custom markers is preserved"* — and a
 rule written outside the pair is the rule that disappears.
+
+Either way there is one policy, consulted in one place, before the Model.
 
 What is not written inside the block stays closed, including every action added
 later. The function ends in a refusal and there is no other exit.

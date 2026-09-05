@@ -28,12 +28,58 @@ under this heading has been released yet.
 - `(*Module).Service`, for an application that attaches from its own handler.
 - `ErrSlugTaken`, `ErrPositionUnavailable`, `ErrAlreadyAttached` and
   `ErrNotAttached`.
+- Finding a label by what somebody typed: `(*TagService).FindByName`,
+  `FindManyByName`, `FindInAnyTaxonomy`, `FindOrCreate`, `Search` and
+  `Taxonomies`, with `(Tag).Matches` and the bounds `MinSearchLen` and
+  `MaxSearchLen`. A name and the slug it reduces to are both accepted, because
+  both are spellings of one label.
+- Set operations over what an entity carries: `(*TagService).AttachTags`,
+  `DetachTags`, `DetachAllTags`, `SyncTags`, `SyncTagsOfTaxonomy`, `HasTag`,
+  `TagsOfTaxonomy` and `OwnersWithAnyTagOfTaxonomy`. They answer "make this the
+  set, and say what changed", which is a different question from the one
+  `Attach` and `Detach` answer -- so the same request sent twice through them
+  leaves the same set instead of being refused.
+- Ordering: `(*TagService).Reorder`, `MoveUp`, `MoveDown`, `MoveToStart`,
+  `MoveToEnd` and `SwapOrder`, with `ErrOrderIncomplete`, `ErrOrderChanged` and
+  `ErrDifferentTaxonomies`. A swap goes through a position claimed from the
+  counter, so no row passes through a place another row holds.
+- `(*TagService).UnusedTags`, the labels of a taxonomy that nothing carries.
+- Six commands, built by `Commands(Deps)` and registered by the application:
+  `tags:list`, `tags:create`, `tags:rename`, `tags:reorder`, `tags:taxonomies`
+  and `tags:prune`. `CommandPrefix` is the namespace they share.
+- A catalogue of sentences, embedded and never published, in `en` and `pt-BR`:
+  `TranslationGroup`, `FallbackLocale`, `Locales`, `Lines`, `Labels`,
+  `(Labels).T`, `(Labels).Tag`, `(Labels).Taxonomy` and `(*Module).Labels`.
+- Four screens instead of one: `ViewIndex`, `ViewEdit`, `ViewOrder` and
+  `ViewPicker`, with `Row`, `IndexPageData`, `EditPageData`, `OrderPageData`,
+  `PickerData`, `FormState`, `(*Module).Rows` and `(*Module).PickerRows`.
+  `ViewPicker` is a fragment an application draws inside a page of its own,
+  because attaching a label to an entity is a question about that entity.
+- Five routes beside the three that were there: `tags.update`, `tags.destroy`,
+  `tags.order`, `tags.reorder` and `tags.move`.
+- `Config.CSRF`, `Config.Policy` and `Config.Translator`.
+- `example/`, behind the `example` build tag, which wires the package and walks
+  the whole surface against SQLite in a temporary directory.
 
 ### Changed
 
 - `(*TagService).List` takes the taxonomy to list, before the query.
 - `CreateRequest` carries `Taxonomy`.
 - `Tag` carries `Type`, `Slug` and `Position` beside `Name`.
+- `Config.CSRF` is **required**. Every screen this module draws writes, and a
+  page rendered without a token is a page whose buttons the application refuses.
+- The rules can be written by the application, through `Config.Policy`. Nil is
+  still `TagPolicy`, which still denies everything: what changed is that an
+  application which installed this package with `go get` can now open an action
+  without forking it.
+- Every handler answers a screen or a resource, chosen by `ctx.WantsJSON()`. A
+  browser gets markup where it used to get JSON; a client sending
+  `Accept: application/json` gets exactly what it got before.
+- `(*TagService).Move` accepts a negative position. The order is a total order
+  over signed integers, and the first claim of a taxonomy lands on zero, so a
+  label moved before it has to land below zero -- the alternative is renumbering
+  the taxonomy to open room at the front, which is the work sparse positions
+  exist to avoid.
 
 ## [0.4.0] - 2026-09-05
 
