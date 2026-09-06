@@ -24,7 +24,7 @@ import (
 // neither a source directory nor a destination one, and there is no second
 // spelling of a destination for the first one to disagree with.
 //
-//go:embed resources/publish
+//go:embed resources/publish/*.kyse.go
 var viewSources embed.FS
 
 // Where a view is written and what it is called.
