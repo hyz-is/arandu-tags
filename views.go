@@ -392,7 +392,7 @@ func readArchive() (paths, names []string) {
 // go mod publishes no path that has one. The destination has it, because that is
 // where an application looks for a package's views.
 func publishedPath(path string) string {
-	return viewPrefix + strings.TrimPrefix(strings.TrimPrefix(path, viewRoot), "")
+	return viewPrefix + strings.TrimPrefix(path, viewRoot)
 }
 
 // viewName turns an archive path into the name the view is registered under.
