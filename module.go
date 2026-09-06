@@ -193,7 +193,9 @@ const PublishCommand = "aru vendor:publish --apply"
 // resources/views/home.kyse.go would land on a page the application wrote, and
 // what publishes the files writes what the archive says.
 func (m *Module) Boot(context.Context) error {
-	prefix := viewRoot + "/" + vendorDir + "/" + m.Name() + "/"
+	// The destination, not the archive: the two differ because go mod refuses
+	// to publish a path with a vendor segment and the destination has one.
+	prefix := viewPrefix + "/"
 	var stray []string
 	for _, path := range PublishedPaths() {
 		if !strings.HasPrefix(path, prefix) {
