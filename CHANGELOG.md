@@ -8,26 +8,72 @@ the versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 A published module version is immutable: Go serves it from the proxy forever, so
 a release is corrected by another release and never by moving a tag.
 
+Every heading below is a tag of this repository. Up to `v0.2.2` this file also
+carried three sections describing releases of the package skeleton this
+repository was cloned from -- numbered `0.2.0`, `0.3.1` and `0.4.0`, dated before
+this repository existed, and numbered over the tags of the same name here. They
+are gone.
+
 ## [Unreleased]
 
-The entries below 0.4.0 are the template this package was cloned from. Nothing
-under this heading has been released yet.
+## [0.2.3] - 2026-09-06
 
 ### Added
 
-- `Tag`, `Taggable` and the tables `tags`, `taggables` and `tag_sequences`.
-- `OwnerType` and `OwnerRef`, with `MustOwnerType`, `ParseOwnerType` and `Ref`.
-  The kind of entity on the other side of an association is declared by the
-  domain that owns it and never derived from a Go type.
-- `(*TagService).Attach`, `Detach`, `TagsOf`, `OwnersWithAnyTag`,
-  `OwnersWithAllTags`, `OwnersWithoutAnyTag`, `Rename` and `Move`.
-- `Label` and `LabelKey`, which read a tag's label out of the application's
-  translation catalogue and fall back to the name on the row.
-- `Slugify`, `ValidTaxonomy`, `DefaultTaxonomy` and `PositionStep`.
-- `TagAttach` and `TagDetach` beside the five actions the template shipped.
-- `(*Module).Service`, for an application that attaches from its own handler.
-- `ErrSlugTaken`, `ErrPositionUnavailable`, `ErrAlreadyAttached` and
-  `ErrNotAttached`.
+- Three tests that hold the two release files against the code: an action
+  declared in `policy.go` and a migration declared in `module.go` have to be
+  named under a version heading rather than under `[Unreleased]`, and the two
+  files have to describe the same set of versions.
+
+### Fixed
+
+- This file and `UPGRADE.md` describe the releases of this package. Both
+  carried the package skeleton's own release history -- `0.4.0`, `0.3.1` and
+  `0.2.0`, dated before this repository existed and numbered over the tags of
+  the same name here -- because `configure` renames the template's values into
+  those files and never resets them. So `v0.2.2` shipped a changelog whose
+  highest heading described a publishing migration of the skeleton, with
+  everything this package actually added filed under `[Unreleased]` and its own
+  `v0.2.1` and `v0.2.2` recorded nowhere.
+
+## [0.2.2] - 2026-09-05
+
+### Fixed
+
+- The archive carries the view sources rather than what the compiler writes
+  beside them. The view compiler decides by the existence of
+  `resources/views`: without it, it treats the module as a component library
+  and writes the compiled Go next to the source, so running the build the
+  guides ask for put compiled views into the archive -- published over a page
+  the project had already generated. The embed pattern names the extension now,
+  and the output is ignored.
+- The published view prefix is trimmed once. The second trim was against the
+  empty string, which removes nothing.
+
+## [0.2.1] - 2026-09-05
+
+### Fixed
+
+- The published module carries its view sources. They were kept at
+  `resources/views/vendor/tags/`, which is the address an application looks for
+  them at, and `go mod` drops every path with a segment named `vendor` when it
+  packs a module, at any depth -- so the files were in the repository and absent
+  from what anybody downloads, and an import failed on the embed with
+  `pattern resources/views: no matching files found` on a tree where every gate
+  here was green. The archive keeps them under `resources/publish/` and the
+  publication carries where they come from and where they go, so they still land
+  at the same addresses.
+
+### Added
+
+- Two gates beside the fix: one refuses a tracked resource path with a `vendor`
+  segment, and the other refuses a published view no handler renders, with
+  `Fragments` naming the one the application draws itself.
+
+## [0.2.0] - 2026-09-05
+
+### Added
+
 - Finding a label by what somebody typed: `(*TagService).FindByName`,
   `FindManyByName`, `FindInAnyTaxonomy`, `FindOrCreate`, `Search` and
   `Taxonomies`, with `(Tag).Matches` and the bounds `MinSearchLen` and
@@ -63,9 +109,6 @@ under this heading has been released yet.
 
 ### Changed
 
-- `(*TagService).List` takes the taxonomy to list, before the query.
-- `CreateRequest` carries `Taxonomy`.
-- `Tag` carries `Type`, `Slug` and `Position` beside `Name`.
 - `Config.CSRF` is **required**. Every screen this module draws writes, and a
   page rendered without a token is a page whose buttons the application refuses.
 - The rules can be written by the application, through `Config.Policy`. Nil is
@@ -81,73 +124,26 @@ under this heading has been released yet.
   the taxonomy to open room at the front, which is the work sparse positions
   exist to avoid.
 
-## [0.4.0] - 2026-09-05
+## [0.1.0] - 2026-09-05
 
 ### Added
 
-- `(*Module).Publishes` declares one `foundation.Publication`, tagged as a view.
-  The contract belongs to the framework, so whatever writes the files reads
-  every module through one interface instead of one this package defined for
-  itself.
-
-### Changed
-
-- The minimum Framework version is now `v0.46.0`, with Hesape `v0.25.0`.
-- `(*Module).Publishes` returns `[]foundation.Publication` instead of `io/fs.FS`.
-- `PublishCommand` is now `aru vendor:publish --apply`.
-- `(*Module).Boot` names the package whose import links the views, alongside the
-  view and the command.
-
-### Removed
-
-- `Publishable`, the contract this package declared for itself.
-  `foundation.Publishable` is the one it answers now.
-- `Publishes`, the package-level function. There was a second form because a
-  command with no database handle could not hold a `Module`; there is no such
-  command any more.
-- `publish`, the command of this module. `aru vendor:publish` reads the modules
-  an application registered and writes what each one declares, which is a
-  question only the application can answer.
-
-## [0.3.1] - 2026-09-03
-
-### Added
-
-- `Publishable`, the optional contract a module answers to hand files to the
-  application, and `Publishes()` on `Module`.
-- `PublishedPaths`, `ViewNames` and `ViewPackages`, the three spellings of one
-  view derived from the archive rather than written down separately.
-- `PublishCommand`, the one spelling of the command that copies the views.
-- `publish`, a command of this module: `go run <module>/publish@latest` writes
-  the views under `resources/views/vendor/<module>/`, refuses to replace a file
-  the project already has without `--force`, and prints the imports that link
-  them.
-- `(*Module).Boot` refuses to serve when a view this package renders was never
-  published, naming the view and the command instead of answering the first
-  request that reaches it with a 500.
-
-## [0.2.0] - 2026-08-29
-
-### Added
-
-- `Tags(db)` exposes the configured, tenant-scoped Model used by the
-  Service after authorization.
-
-### Changed
-
-- The minimum Framework version is now `v0.41.0`, with Hesape `v0.19.1`.
-- `NewTagService` now accepts `*data.DB` instead of
-  `*TagRepository`.
-- `(*TagService).Create` now returns `(*Tag, error)`.
-- `(*TagService).Find` now returns `(*Tag, error)`.
-- `(*TagService).List` now returns `([]*Tag, error)`.
-- `Tag`: old is comparable; new is not because it embeds
-  `model.Model[Tag]`. Compare stable fields such as `ID` instead.
-
-### Removed
-
-- `TagRepository` and `NewTagRepository`.
-- `(*TagRepository).Create`, `(*TagRepository).Delete`,
-  `(*TagRepository).Find`, `(*TagRepository).List`, and
-  `(*TagRepository).Update`. Add a Repository only for specialized
-  queries, reports, projections, read models, exports, or external storage.
+- `Tag`, `Taggable` and the tables `tags`, `taggables` and `tag_sequences`,
+  created by `20260905_0001_create_tag_tables`.
+- `TagPolicy`, and the actions it answers about: `TagView`, `TagList`,
+  `TagCreate`, `TagUpdate` and `TagDelete`.
+- `OwnerType` and `OwnerRef`, with `MustOwnerType`, `ParseOwnerType` and `Ref`.
+  The kind of entity on the other side of an association is declared by the
+  domain that owns it and never derived from a Go type.
+- `(*TagService).Attach`, `Detach`, `TagsOf`, `OwnersWithAnyTag`,
+  `OwnersWithAllTags`, `OwnersWithoutAnyTag`, `Rename` and `Move`.
+- `Label` and `LabelKey`, which read a tag's label out of the application's
+  translation catalogue and fall back to the name on the row.
+- `Slugify`, `ValidTaxonomy`, `DefaultTaxonomy` and `PositionStep`.
+- `TagAttach` and `TagDetach`, the two actions an association is decided by.
+- `(*Module).Service`, for an application that attaches from its own handler.
+- `ErrSlugTaken`, `ErrPositionUnavailable`, `ErrAlreadyAttached` and
+  `ErrNotAttached`.
+- `(*TagService).List` takes the taxonomy to list, before the query, and
+  `CreateRequest` carries one. A `Tag` carries `Type`, `Slug` and `Position`
+  beside `Name`.

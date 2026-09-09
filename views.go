@@ -41,8 +41,15 @@ const (
 	// the embed above then matches nothing in any project that imports this.
 	viewRoot = "resources/publish"
 	// viewPrefix is where the same files are written in a project, which is the
-	// Laravel address for a package's views and the one an application expects.
-	viewPrefix = "resources/views/vendor/tags"
+	// address an application looks for an installed package's views at.
+	//
+	// It is not named vendor either, and for the other of the two rules: a
+	// package whose import path carries that element cannot be imported at all
+	// -- "use of vendored package not allowed". A published view is compiled
+	// into a Go package the application has to import for its init() to
+	// register anything, so the destination is the half that moving the archive
+	// could not fix.
+	viewPrefix = "resources/views/modules/tags"
 	viewSuffix = ".kyse.go"
 )
 
@@ -59,14 +66,14 @@ const compiledRoot = "storage/framework/views"
 // same set from the archive, and a test holds the two together.
 const (
 	// ViewIndex is the listing of one taxonomy.
-	ViewIndex = "vendor.tags.index"
+	ViewIndex = "modules.tags.index"
 	// ViewEdit is the form that renames one label.
-	ViewEdit = "vendor.tags.edit"
+	ViewEdit = "modules.tags.edit"
 	// ViewOrder is the screen a whole taxonomy is rearranged on.
-	ViewOrder = "vendor.tags.order"
+	ViewOrder = "modules.tags.order"
 	// ViewPicker is the fragment an application draws inside a screen of its
 	// own, to show and change what one of its entities carries.
-	ViewPicker = "vendor.tags.picker"
+	ViewPicker = "modules.tags.picker"
 )
 
 // Fragments are the views an application renders itself, from inside a page of
@@ -274,14 +281,6 @@ func (d EditPageData) Form() FormState { return FormState{Page: d.Page} }
 
 // Form is the state the inputs of this screen read.
 func (d OrderPageData) Form() FormState { return FormState{Page: d.Page} }
-
-// vendorDir is the directory an application keeps other people's views in.
-//
-// It is part of the path in the archive and not something the publication adds,
-// which is what makes the archive a literal picture of what lands in the
-// project. Two packages with a view called index are two files under two names
-// below it, and neither shadows the other or the application's own.
-const vendorDir = "vendor"
 
 // Publishes declares the files this package offers, each at the path it takes
 // relative to the root of the project.
