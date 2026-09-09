@@ -8,6 +8,46 @@ before `v0.1.0` here. They are gone.
 
 ## Unreleased
 
+### Published views move out of `vendor/`
+
+The views this package publishes land in `resources/views/modules/tags/` and
+compile to `storage/framework/views/modules/tags`. It used to be `vendor/` in
+both, and that address could not work: the go command refuses to import a
+package whose path carries a `vendor` element —
+
+```
+bootstrap/app.go:98:2: use of vendored package not allowed
+```
+
+— and a published view is compiled into a Go package the application has to
+import for its `init()` to register anything. So the last step of the install,
+the import `(*Module).Boot` asks for, did not build.
+
+The archive was already under `resources/publish`, which is what keeps the files
+in the module zip: a file under a directory named `vendor` is dropped from it at
+any depth. That fixed the source side and left the destination carrying the
+word, and the destination is the address the application looks the views up at.
+
+The view name constants moved with it: `vendor.tags.index` is now `modules.tags.index`.
+The constant names are unchanged, so code that renders through them keeps
+compiling.
+
+**A project that already published the old tree** publishes again and removes
+the old one by hand:
+
+```sh
+aru vendor:publish --tag=view --apply
+aru view:build
+rm -rf resources/views/vendor/tags storage/framework/views/vendor/tags
+```
+
+then deletes the old lines from `vendor-publish.lock` and changes the import in
+`bootstrap/app.go` from `storage/framework/views/vendor/tags` to
+`storage/framework/views/modules/tags`.
+
+Framework `v0.46.4` and Hesape `v0.37.0` refuse a publication that carries the
+reserved name, so this cannot come back quietly.
+
 Nothing yet.
 
 ## v0.2.3
