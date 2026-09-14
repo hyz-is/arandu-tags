@@ -1,3 +1,7 @@
+<p align="center">
+  <img src=".github/logo.svg" alt="Arandu" width="180">
+</p>
+
 # Arandu Tags
 
 An Arandu package. It holds labels, records which of an application's entities
