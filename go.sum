@@ -1,9 +1,9 @@
-github.com/arandu-io/framework v0.47.0 h1:BCzMO2INVvjtvfRrj8DF5nXbcfaRgYPgAk4a7XDo13I=
-github.com/arandu-io/framework v0.47.0/go.mod h1:lcAKpq0C1iuF8N5hXlZBCtQnPS1JAuvRNakImVgBBQY=
-github.com/arandu-io/hesape v0.41.0 h1:BJOLBWVvWp4ZGBrZSjQjVVmLPvGfhHq+fkY4LwjuC0g=
-github.com/arandu-io/hesape v0.41.0/go.mod h1:KNXJJuKrDIpWvJgNbE2LxtHkOqO4J6cqPkmMcNlxrL0=
-github.com/arandu-io/kyse v0.29.0 h1:brycZl3J8nd5ahuG5Jl8bcHRGCTNNxLyAwM5nRokfh8=
-github.com/arandu-io/kyse v0.29.0/go.mod h1:uBRl4e6+TPaljfyuRrl/Nk0X7hJOeGX4L3uxW/QaLvw=
+github.com/arandu-io/framework v0.47.1 h1:iVEow4L352Qpy19NaWc8gfUUhUwH8g2Kvrp8k9BWMbg=
+github.com/arandu-io/framework v0.47.1/go.mod h1:P12IpZ300kEOKTuKbvoZvMcMGRJD8mTylTyw/YyePvg=
+github.com/arandu-io/hesape v0.41.1 h1:GO/peHfbcHmrS3jufesCbBqaY9n0wxw72cftsvy8xWk=
+github.com/arandu-io/hesape v0.41.1/go.mod h1:KNXJJuKrDIpWvJgNbE2LxtHkOqO4J6cqPkmMcNlxrL0=
+github.com/arandu-io/kyse v0.29.1 h1:/uPs7neVOsmXUaHoMqJV8q8JqaH4R/7TvVyxcJBaLlE=
+github.com/arandu-io/kyse v0.29.1/go.mod h1:DlGs9g8Jmbc9ieTjOdBcYqP23pYNUw1wmQO67+NDLQg=
 github.com/dustin/go-humanize v1.0.1 h1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkpeCY=
 github.com/dustin/go-humanize v1.0.1/go.mod h1:Mu1zIs6XwVuF/gI1OepvI0qD18qycQx+mFykh5fBlto=
 github.com/google/pprof v0.0.0-20260802141513-ef3492d7dac3 h1:LMLX+LgTNWpfvCBdFebv6EsYotImrt/Ppc5cXIriCSo=
