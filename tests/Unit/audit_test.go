@@ -261,6 +261,14 @@ type auditedPackage struct {
 // resolved is reported as authorizing nothing or as reaching nothing, and the
 // helper itself is still audited on its own -- so an ambiguous name hides no
 // path into the tables, it only makes somebody rename one of the two.
+//
+// A generated file is audited like any other, and its declarations are not
+// targets of that resolution. The query files aru model:build writes forward
+// to the model core: each is reached only through a constructor modelEntryPoints
+// already names, and every method of one that runs a statement takes a Grant.
+// Their method names are the Service's own -- Find, Create, Delete -- so
+// indexing them would make every call to the Service ambiguous, and the one
+// rename that would fix it is in a file nobody may edit.
 func readPackage(t *testing.T) *auditedPackage {
 	t.Helper()
 
@@ -271,6 +279,7 @@ func readPackage(t *testing.T) *auditedPackage {
 	}
 	ambiguous := map[string]bool{}
 	for _, source := range auditedFiles(t) {
+		generated := ast.IsGenerated(source.file)
 		for _, declaration := range source.file.Decls {
 			function, ok := declaration.(*ast.FuncDecl)
 			if !ok || function.Body == nil {
@@ -284,11 +293,14 @@ func readPackage(t *testing.T) *auditedPackage {
 				decl:       function,
 				takesGrant: takesGrant(function),
 			}
+			pkg.ordered = append(pkg.ordered, entry)
+			if generated {
+				continue
+			}
 			if _, taken := pkg.byName[name]; taken {
 				ambiguous[name] = true
 			}
 			pkg.byName[name] = entry
-			pkg.ordered = append(pkg.ordered, entry)
 		}
 	}
 	for name := range ambiguous {

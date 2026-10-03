@@ -11,7 +11,7 @@ import (
 // The policy substituted in these tests allows every action and says nothing
 // about who owns a row, so the only thing standing between one customer and
 // another is the predicate the statement carries. Delete the tenant scope from
-// Tags -- set m.TenantColumn to "" in model.go -- and every assertion below
+// Tags -- set Global: true on tagTable in model.go -- and every assertion below
 // fails, which is the property they are here to hold.
 //
 // The shipped policy's own refusal of a foreign record is a separate guarantee

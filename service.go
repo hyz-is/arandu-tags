@@ -10,7 +10,6 @@ import (
 	"github.com/arandu-io/framework/data"
 	"github.com/arandu-io/framework/security"
 	"github.com/arandu-io/framework/validation"
-	"github.com/arandu-io/hesape/database/model"
 
 	"github.com/hyz-is/arandu-tags/internal/sequence"
 )
@@ -184,7 +183,7 @@ func (s *TagService) Create(ctx context.Context, actor security.Subject, in Crea
 		return nil, err
 	}
 
-	taken, err := Tags(s.db).NewQuery().
+	taken, err := Tags(s.db).
 		Where("type", "=", proposed.Type).
 		Where("slug", "=", proposed.Slug).
 		Exists(ctx, g)
@@ -204,11 +203,10 @@ func (s *TagService) Create(ctx context.Context, actor security.Subject, in Crea
 	if err != nil {
 		return nil, err
 	}
-	instance, err := Tags(s.db).NewInstance(nil, false)
+	candidate, err := Tags(s.db).New()
 	if err != nil {
 		return nil, err
 	}
-	candidate := instance.Entity
 	candidate.ID = id
 	candidate.TenantID = data.Tenant(g)
 	candidate.Type = proposed.Type
@@ -241,7 +239,7 @@ func (s *TagService) Find(ctx context.Context, actor security.Subject, id string
 		return nil, err
 	}
 
-	record, err := Tags(s.db).NewQuery().WhereKey(id).First(ctx, g)
+	record, err := Tags(s.db).WhereKey(id).First(ctx, g)
 	if err != nil {
 		return nil, err
 	}
@@ -294,18 +292,18 @@ func (s *TagService) List(ctx context.Context, actor security.Subject, taxonomy 
 		limit = maxLimit
 	}
 
-	page := Tags(s.db).NewQuery().Where("type", "=", taxonomy)
+	page := Tags(s.db).Where("type", "=", taxonomy)
 	if q.Cursor != "" {
-		anchor, err := Tags(s.db).NewQuery().WhereKey(q.Cursor).Value(ctx, g, column)
+		anchor, err := Tags(s.db).WhereKey(q.Cursor).Value(ctx, g, column)
 		if err != nil {
 			return nil, err
 		}
 		if anchor == nil {
 			return nil, nil
 		}
-		page = page.Where(func(after *model.Builder[Tag]) {
+		page = page.Where(func(after *TagQuery) {
 			after.Where(column, ">", anchor).
-				OrWhere(func(equal *model.Builder[Tag]) {
+				OrWhere(func(equal *TagQuery) {
 					equal.Where(column, "=", anchor).Where("id", ">", q.Cursor)
 				})
 		})
@@ -325,7 +323,7 @@ func (s *TagService) Rename(ctx context.Context, actor security.Subject, id stri
 		return nil, err
 	}
 
-	record, err := Tags(s.db).NewQuery().WhereKey(id).First(ctx, g)
+	record, err := Tags(s.db).WhereKey(id).First(ctx, g)
 	if err != nil {
 		return nil, err
 	}
@@ -359,7 +357,7 @@ func (s *TagService) Move(ctx context.Context, actor security.Subject, id string
 		return nil, fmt.Errorf("tags: the position is %d, and cannot be negative", position)
 	}
 
-	record, err := Tags(s.db).NewQuery().WhereKey(id).First(ctx, g)
+	record, err := Tags(s.db).WhereKey(id).First(ctx, g)
 	if err != nil {
 		return nil, err
 	}
@@ -392,7 +390,7 @@ func (s *TagService) Delete(ctx context.Context, actor security.Subject, id stri
 		return err
 	}
 
-	record, err := Tags(s.db).NewQuery().WhereKey(id).First(ctx, g)
+	record, err := Tags(s.db).WhereKey(id).First(ctx, g)
 	if err != nil {
 		return err
 	}
@@ -403,7 +401,7 @@ func (s *TagService) Delete(ctx context.Context, actor security.Subject, id stri
 		return err
 	}
 
-	if _, err := Taggables(s.db).NewQuery().Where("tag_id", "=", record.ID).Delete(ctx, g); err != nil {
+	if _, err := Taggables(s.db).Where("tag_id", "=", record.ID).Delete(ctx, g); err != nil {
 		return err
 	}
 	if _, err := record.Delete(ctx, g); err != nil {
@@ -431,7 +429,7 @@ func (s *TagService) Attach(ctx context.Context, actor security.Subject, ref Own
 		return fmt.Errorf("%w: the reference names no entity", ErrOwnerType)
 	}
 
-	record, err := Tags(s.db).NewQuery().WhereKey(tagID).First(ctx, g)
+	record, err := Tags(s.db).WhereKey(tagID).First(ctx, g)
 	if err != nil {
 		return err
 	}
@@ -442,7 +440,7 @@ func (s *TagService) Attach(ctx context.Context, actor security.Subject, ref Own
 		return err
 	}
 
-	carried, err := Taggables(s.db).NewQuery().
+	carried, err := Taggables(s.db).
 		Where("tag_id", "=", record.ID).
 		Where("owner_type", "=", ref.Type().String()).
 		Where("owner_id", "=", ref.ID()).
@@ -470,7 +468,7 @@ func (s *TagService) Detach(ctx context.Context, actor security.Subject, ref Own
 		return fmt.Errorf("%w: the reference names no entity", ErrOwnerType)
 	}
 
-	record, err := Tags(s.db).NewQuery().WhereKey(tagID).First(ctx, g)
+	record, err := Tags(s.db).WhereKey(tagID).First(ctx, g)
 	if err != nil {
 		return err
 	}
@@ -481,7 +479,7 @@ func (s *TagService) Detach(ctx context.Context, actor security.Subject, ref Own
 		return err
 	}
 
-	removed, err := Taggables(s.db).NewQuery().
+	removed, err := Taggables(s.db).
 		Where("tag_id", "=", record.ID).
 		Where("owner_type", "=", ref.Type().String()).
 		Where("owner_id", "=", ref.ID()).
@@ -511,7 +509,7 @@ func (s *TagService) TagsOf(ctx context.Context, actor security.Subject, ref Own
 		return nil, fmt.Errorf("%w: the reference names no entity", ErrOwnerType)
 	}
 
-	carried, err := Taggables(s.db).NewQuery().
+	carried, err := Taggables(s.db).
 		Where("owner_type", "=", ref.Type().String()).
 		Where("owner_id", "=", ref.ID()).
 		Limit(maxLimit).
@@ -524,7 +522,7 @@ func (s *TagService) TagsOf(ctx context.Context, actor security.Subject, ref Own
 		return nil, nil
 	}
 
-	return Tags(s.db).NewQuery().
+	return Tags(s.db).
 		WhereIn("id", anys(ids)).
 		OrderBy("type").OrderBy("position").OrderBy("id").
 		Get(ctx, g)
@@ -547,7 +545,7 @@ func (s *TagService) OwnersWithAnyTag(ctx context.Context, actor security.Subjec
 		return nil, err
 	}
 
-	found, err := Taggables(s.db).NewQuery().
+	found, err := Taggables(s.db).
 		Where("owner_type", "=", kind.String()).
 		WhereIn("tag_id", anys(tagIDs)).
 		Pluck(ctx, g, "owner_id")
@@ -573,14 +571,14 @@ func (s *TagService) OwnersWithAllTags(ctx context.Context, actor security.Subje
 	}
 
 	wanted := distinct(tagIDs)
-	grouped := Taggables(s.db).NewQuery().
+	grouped := Taggables(s.db).
 		Where("owner_type", "=", kind.String()).
 		WhereIn("tag_id", anys(wanted)).
 		GroupBy("owner_id")
 	// The label list is deduplicated above, so counting distinct labels per
 	// entity and comparing with its length is the same question as "carries
 	// all of them" -- and it stays that way when the same label is named twice.
-	grouped.GetQuery().HavingRaw("count(distinct tag_id) = ?", len(wanted))
+	grouped.Base().GetQuery().HavingRaw("count(distinct tag_id) = ?", len(wanted))
 
 	found, err := grouped.Pluck(ctx, g, "owner_id")
 	if err != nil {
@@ -615,7 +613,7 @@ func (s *TagService) OwnersWithoutAnyTag(ctx context.Context, actor security.Sub
 	}
 
 	remaining := distinct(candidates)
-	found, err := Taggables(s.db).NewQuery().
+	found, err := Taggables(s.db).
 		Where("owner_type", "=", kind.String()).
 		WhereIn("tag_id", anys(tagIDs)).
 		WhereIn("owner_id", anys(remaining)).
@@ -668,7 +666,7 @@ func (s *TagService) claimPositions(ctx context.Context, g security.Grant, taxon
 	width := int64(count) * PositionStep
 
 	for attempt := 0; attempt < claimAttempts; attempt++ {
-		counter, err := sequence.Counters(s.db).NewQuery().WhereKey(key).First(ctx, g)
+		counter, err := sequence.Counters(s.db).WhereKey(key).First(ctx, g)
 		if err != nil {
 			return 0, err
 		}
@@ -680,7 +678,7 @@ func (s *TagService) claimPositions(ctx context.Context, g security.Grant, taxon
 		}
 
 		claimed := counter.NextPosition
-		changed, err := sequence.Counters(s.db).NewQuery().
+		changed, err := sequence.Counters(s.db).
 			WhereKey(key).
 			Where("next_position", "=", claimed).
 			Update(ctx, g, map[string]any{"next_position": claimed + width})
@@ -724,11 +722,10 @@ func waitToClaimAgain(ctx context.Context, attempt int) error {
 // seedSequence writes the counter row of a taxonomy that has none yet, and
 // returns whichever row ends up being there.
 func (s *TagService) seedSequence(ctx context.Context, g security.Grant, key, taxonomy string) (*sequence.Counter, error) {
-	instance, err := sequence.Counters(s.db).NewInstance(nil, false)
+	counter, err := sequence.Counters(s.db).New()
 	if err != nil {
 		return nil, err
 	}
-	counter := instance.Entity
 	counter.ID = key
 	counter.TenantID = data.Tenant(g)
 	counter.Type = taxonomy
@@ -737,7 +734,7 @@ func (s *TagService) seedSequence(ctx context.Context, g security.Grant, key, ta
 	if _, err := counter.Save(ctx, g); err == nil {
 		return counter, nil
 	} else {
-		existing, readErr := sequence.Counters(s.db).NewQuery().WhereKey(key).First(ctx, g)
+		existing, readErr := sequence.Counters(s.db).WhereKey(key).First(ctx, g)
 		if readErr != nil {
 			return nil, readErr
 		}

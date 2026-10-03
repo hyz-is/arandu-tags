@@ -60,7 +60,7 @@ func (s *TagService) DetachTags(ctx context.Context, actor security.Subject, ref
 		return 0, err
 	}
 
-	removed, err := Taggables(s.db).NewQuery().
+	removed, err := Taggables(s.db).
 		Where("owner_type", "=", ref.Type().String()).
 		Where("owner_id", "=", ref.ID()).
 		WhereIn("tag_id", anys(orderedIDs(wanted))).
@@ -88,7 +88,7 @@ func (s *TagService) DetachAllTags(ctx context.Context, actor security.Subject, 
 		return 0, fmt.Errorf("%w: the reference names no entity", ErrOwnerType)
 	}
 
-	removed, err := Taggables(s.db).NewQuery().
+	removed, err := Taggables(s.db).
 		Where("owner_type", "=", ref.Type().String()).
 		Where("owner_id", "=", ref.ID()).
 		Delete(ctx, g)
@@ -136,7 +136,7 @@ func (s *TagService) HasTag(ctx context.Context, actor security.Subject, ref Own
 		return false, ErrNotFound
 	}
 
-	return Taggables(s.db).NewQuery().
+	return Taggables(s.db).
 		Where("tag_id", "=", tagID).
 		Where("owner_type", "=", ref.Type().String()).
 		Where("owner_id", "=", ref.ID()).
@@ -165,7 +165,7 @@ func (s *TagService) TagsOfTaxonomy(ctx context.Context, actor security.Subject,
 	if err != nil || len(carried) == 0 {
 		return nil, err
 	}
-	return Tags(s.db).NewQuery().
+	return Tags(s.db).
 		Where("type", "=", taxonomy).
 		WhereIn("id", anys(carried)).
 		OrderBy("position").OrderBy("id").
@@ -204,7 +204,7 @@ func (s *TagService) OwnersWithAnyTagOfTaxonomy(ctx context.Context, actor secur
 	// those taxonomies, then the entities carrying them. A join would answer in
 	// one round trip and would tie this package to a profile where one statement
 	// may only name one table.
-	labels, err := Tags(s.db).NewQuery().
+	labels, err := Tags(s.db).
 		WhereIn("type", anys(distinct(taxonomies))).
 		Limit(MaxIDsPerQuery).
 		Pluck(ctx, g, "id")
@@ -238,7 +238,7 @@ func (s *TagService) UnusedTags(ctx context.Context, actor security.Subject, tax
 		return nil, fmt.Errorf("tags: %q cannot be a taxonomy", taxonomy)
 	}
 
-	held, err := Tags(s.db).NewQuery().
+	held, err := Tags(s.db).
 		Where("type", "=", taxonomy).
 		OrderBy("position").OrderBy("id").
 		Limit(maxLimit+1).
@@ -253,7 +253,7 @@ func (s *TagService) UnusedTags(ctx context.Context, actor security.Subject, tax
 		return nil, nil
 	}
 
-	carried, err := Taggables(s.db).NewQuery().
+	carried, err := Taggables(s.db).
 		WhereIn("tag_id", anys(orderedIDs(held))).
 		Limit(maxLimit*MaxIDsPerQuery).
 		Pluck(ctx, g, "tag_id")
@@ -322,7 +322,7 @@ func (s *TagService) sync(ctx context.Context, actor security.Subject, ref Owner
 		}
 	}
 	if len(remove) > 0 {
-		removed, err := Taggables(s.db).NewQuery().
+		removed, err := Taggables(s.db).
 			Where("owner_type", "=", ref.Type().String()).
 			Where("owner_id", "=", ref.ID()).
 			WhereIn("tag_id", anys(remove)).
@@ -369,7 +369,7 @@ func (s *TagService) authorizedForSet(ctx context.Context, actor security.Subjec
 		return g, nil, nil
 	}
 
-	found, err := Tags(s.db).NewQuery().
+	found, err := Tags(s.db).
 		WhereIn("id", anys(wanted)).
 		OrderBy("type").OrderBy("position").OrderBy("id").
 		Get(ctx, g)
@@ -392,7 +392,7 @@ func (s *TagService) authorizedForSet(ctx context.Context, actor security.Subjec
 
 // carriedIDs are the labels one entity carries, as identifiers.
 func (s *TagService) carriedIDs(ctx context.Context, g security.Grant, ref OwnerRef) ([]string, error) {
-	found, err := Taggables(s.db).NewQuery().
+	found, err := Taggables(s.db).
 		Where("owner_type", "=", ref.Type().String()).
 		Where("owner_id", "=", ref.ID()).
 		Limit(maxLimit).
@@ -407,7 +407,7 @@ func (s *TagService) carriedIDs(ctx context.Context, g security.Grant, ref Owner
 // rather than by reading their taxonomy off the association -- which does not
 // carry one, and would be a second place for it to be written down.
 func (s *TagService) narrowToTaxonomy(ctx context.Context, g security.Grant, ids []string, taxonomy string) ([]string, error) {
-	found, err := Tags(s.db).NewQuery().
+	found, err := Tags(s.db).
 		Where("type", "=", taxonomy).
 		WhereIn("id", anys(ids)).
 		Limit(maxLimit).
@@ -424,11 +424,10 @@ func (s *TagService) writeLink(ctx context.Context, g security.Grant, ref OwnerR
 	if err != nil {
 		return err
 	}
-	instance, err := Taggables(s.db).NewInstance(nil, false)
+	link, err := Taggables(s.db).New()
 	if err != nil {
 		return err
 	}
-	link := instance.Entity
 	link.ID = id
 	link.TenantID = data.Tenant(g)
 	link.TagID = tagID

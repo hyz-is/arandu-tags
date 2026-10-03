@@ -66,7 +66,7 @@ func (s *TagService) Reorder(ctx context.Context, actor security.Subject, taxono
 	// One more than the ceiling, so a taxonomy too large to order in one call is
 	// told so rather than silently reordered against the first MaxIDsPerQuery of
 	// it.
-	held, err := Tags(s.db).NewQuery().
+	held, err := Tags(s.db).
 		Where("type", "=", taxonomy).
 		OrderBy("position").OrderBy("id").
 		Limit(MaxIDsPerQuery+1).
@@ -202,7 +202,7 @@ func (s *TagService) SwapOrder(ctx context.Context, actor security.Subject, firs
 		return nil
 	}
 
-	second, err := Tags(s.db).NewQuery().WhereKey(secondID).First(ctx, g)
+	second, err := Tags(s.db).WhereKey(secondID).First(ctx, g)
 	if err != nil {
 		return err
 	}
@@ -230,7 +230,7 @@ func (s *TagService) moveBeside(ctx context.Context, actor security.Subject, id,
 		return nil, err
 	}
 
-	neighbour, err := Tags(s.db).NewQuery().
+	neighbour, err := Tags(s.db).
 		Where("type", "=", record.Type).
 		Where("position", comparison, record.Position).
 		OrderBy("position", direction).
@@ -262,7 +262,7 @@ func (s *TagService) authorizedForMove(ctx context.Context, actor security.Subje
 		return security.Grant{}, nil, err
 	}
 
-	record, err := Tags(s.db).NewQuery().WhereKey(id).First(ctx, g)
+	record, err := Tags(s.db).WhereKey(id).First(ctx, g)
 	if err != nil {
 		return security.Grant{}, nil, err
 	}
@@ -281,7 +281,7 @@ func (s *TagService) authorizedForMove(ctx context.Context, actor security.Subje
 // nothing else, so a caller comparing the two learns that its record is already
 // at that edge.
 func (s *TagService) edgePosition(ctx context.Context, g security.Grant, taxonomy, direction string) (int64, error) {
-	edge, err := Tags(s.db).NewQuery().
+	edge, err := Tags(s.db).
 		Where("type", "=", taxonomy).
 		OrderBy("position", direction).
 		First(ctx, g)
@@ -304,7 +304,7 @@ func (s *TagService) writePosition(ctx context.Context, g security.Grant, record
 	if record.Position == position {
 		return nil
 	}
-	changed, err := Tags(s.db).NewQuery().
+	changed, err := Tags(s.db).
 		WhereKey(record.ID).
 		Where("position", "=", record.Position).
 		Update(ctx, g, map[string]any{"position": position})

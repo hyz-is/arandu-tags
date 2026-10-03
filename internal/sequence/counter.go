@@ -9,7 +9,6 @@
 package sequence
 
 import (
-	"github.com/arandu-io/framework/data"
 	"github.com/arandu-io/hesape/database/model"
 )
 
@@ -21,7 +20,7 @@ const TableName = "tag_sequences"
 // One row per tenant and taxonomy, and its identifier is the pair, so the row
 // a claim needs is addressed by key rather than searched for.
 type Counter struct {
-	model.Model[Counter]
+	model.Model
 
 	// ID is the tenant and the taxonomy, joined.
 	ID string `db:"id"`
@@ -36,13 +35,15 @@ type Counter struct {
 	NextPosition int64 `db:"next_position"`
 }
 
-// Counters returns the configured model for the counter table.
-func Counters(db *data.DB) *model.Model[Counter] {
-	m := model.NewModel[Counter](TableName, db, db.GetQueryGrammar(), db.GetPostProcessor())
-	m.KeyType = "string"
-	m.Incrementing = false
-	// The row carries no time: it is a counter, and when it last moved says
-	// nothing anybody reads.
-	m.Timestamps = false
-	return m
-}
+// counterTable is the table of Counter. Its query, Counters, is generated
+// beside it by aru model:build.
+//
+// The key is the tenant and the taxonomy, written by the claim, so it does not
+// increment. The row carries no time: it is a counter, and when it last moved
+// says nothing anybody reads.
+var counterTable = model.NewTable(model.TableSpec{
+	Name:         TableName,
+	New:          func() model.Entity { return new(Counter) },
+	ManualKey:    true,
+	NoTimestamps: true,
+})

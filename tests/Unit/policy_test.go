@@ -13,6 +13,7 @@ import (
 	"github.com/arandu-io/framework/data"
 	"github.com/arandu-io/framework/security"
 	"github.com/arandu-io/hesape/database/model"
+	"github.com/arandu-io/hesape/database/query"
 
 	tags "github.com/hyz-is/arandu-tags"
 )
@@ -277,21 +278,107 @@ func TestEveryExportedServiceMethodIsRefused(t *testing.T) {
 	}
 }
 
+// recordingHandle runs nothing and keeps every statement it is handed, so a
+// test reads what a table compiles instead of reading its settings. The table
+// keeps its settings to itself; what it writes is the behaviour they decide.
+type recordingHandle struct {
+	*data.DB
+	statements []recordedStatement
+}
+
+type recordedStatement struct {
+	sql      string
+	bindings []any
+}
+
+// newRecordingHandle borrows the grammar and the processor of an SQLite handle
+// over no database, and answers every statement itself.
+func newRecordingHandle() *recordingHandle { return &recordingHandle{DB: nilHandle()} }
+
+func (h *recordingHandle) record(sql string, bindings []any) {
+	h.statements = append(h.statements, recordedStatement{sql: sql, bindings: slices.Clone(bindings)})
+}
+
+func (h *recordingHandle) Select(_ context.Context, sql string, bindings []any, _ bool) ([]query.Record, error) {
+	h.record(sql, bindings)
+	return nil, nil
+}
+
+func (h *recordingHandle) Insert(_ context.Context, sql string, bindings []any) (bool, error) {
+	h.record(sql, bindings)
+	return true, nil
+}
+
+func (h *recordingHandle) Update(_ context.Context, sql string, bindings []any) (int64, error) {
+	h.record(sql, bindings)
+	return 1, nil
+}
+
+func (h *recordingHandle) Delete(_ context.Context, sql string, bindings []any) (int64, error) {
+	h.record(sql, bindings)
+	return 1, nil
+}
+
+func (h *recordingHandle) Statement(_ context.Context, sql string, bindings []any) (bool, error) {
+	h.record(sql, bindings)
+	return true, nil
+}
+
+// first is the first recorded statement that starts with verb.
+func (h *recordingHandle) first(t *testing.T, verb string) recordedStatement {
+	t.Helper()
+	for _, statement := range h.statements {
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(statement.sql)), verb) {
+			return statement
+		}
+	}
+	t.Fatalf("no %s statement was issued; recorded %v", verb, h.statements)
+	return recordedStatement{}
+}
+
 func TestTagsReturnsAWiredTenantScopedModel(t *testing.T) {
 	t.Parallel()
 
-	rows := tags.Tags(nilHandle())
-	if rows.GetTable() != "tags" {
-		t.Fatalf("Tags table = %q, want tags", rows.GetTable())
+	ctx := context.Background()
+	handle := newRecordingHandle()
+	table := tags.Tags(handle).Base().Table()
+	if table.Name() != "tags" {
+		t.Fatalf("Tags table = %q, want tags", table.Name())
 	}
-	if rows.KeyType != "string" || rows.Incrementing {
-		t.Fatalf("Tags key is type %q, incrementing %t; want application-generated text", rows.KeyType, rows.Incrementing)
+	if key := table.MorphModel(handle); key.GetKeyName() != "id" || key.GetKeyType() != "string" {
+		t.Fatalf("Tags key is %q of type %q; want id, as text", key.GetKeyName(), key.GetKeyType())
 	}
-	if rows.TenantColumn != "tenant_id" {
-		t.Fatalf("Tags tenant column = %q, want tenant_id", rows.TenantColumn)
+
+	row, err := tags.Tags(handle).New()
+	if err != nil {
+		t.Fatalf("building a row: %v", err)
 	}
-	if model.ModelOf(rows.Entity) != rows {
-		t.Fatal("Tags returned an entity whose embedded Model is not wired to it")
+	if row.Table() != table {
+		t.Fatal("Tags returned an entity whose embedded Model is not wired to its table")
+	}
+
+	// The key is application-generated text: the insert carries the one the
+	// row was given, and the engine is never asked for one -- an incrementing
+	// key would go through the processor, which runs on no database here.
+	row.ID = "record-1"
+	if _, err := row.Save(ctx, security.SystemGrant(tags.TagCreate, "acme")); err != nil {
+		t.Fatalf("saving through the recording handle: %v", err)
+	}
+	insert := handle.first(t, "insert")
+	if !slices.Contains(insert.bindings, any("record-1")) || row.ID != "record-1" {
+		t.Fatalf("the insert %q %v does not write the application key, or the row lost it (%q)", insert.sql, insert.bindings, row.ID)
+	}
+	if !strings.Contains(insert.sql, "tenant_id") || !slices.Contains(insert.bindings, any("acme")) {
+		t.Fatalf("the insert %q %v does not stamp tenant_id with the Grant's tenant", insert.sql, insert.bindings)
+	}
+
+	// And the tenant column scopes a read by the Grant's tenant.
+	if _, err := tags.Tags(handle).WhereKey("record-1").First(ctx, security.SystemGrant(tags.TagView, "acme")); err != nil {
+		t.Fatalf("reading through the recording handle: %v", err)
+	}
+	read := handle.first(t, "select")
+	if !strings.Contains(read.sql, "tenant_id") || !slices.Contains(read.bindings, any("acme")) {
+		t.Fatalf("the read %q %v is not filtered by tenant_id with the Grant's tenant", read.sql, read.bindings)
 	}
 }
 
@@ -300,7 +387,7 @@ func TestASystemGrantWithoutATenantReachesNothing(t *testing.T) {
 
 	// A system grant with no tenant names no customer. The Model refuses it
 	// while preparing the query, before the nil handle can issue a statement.
-	_, err := tags.Tags(nilHandle()).NewQuery().WhereKey("record-1").First(
+	_, err := tags.Tags(nilHandle()).WhereKey("record-1").First(
 		context.Background(), security.SystemGrant(tags.TagView, ""))
 	if !errors.Is(err, model.ErrNoTenant) {
 		t.Fatalf("a system grant with no tenant returned %v, want ErrNoTenant", err)

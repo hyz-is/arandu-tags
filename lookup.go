@@ -16,7 +16,6 @@ import (
 
 	"github.com/arandu-io/framework/data"
 	"github.com/arandu-io/framework/security"
-	"github.com/arandu-io/hesape/database/model"
 )
 
 // The bounds a search is held to.
@@ -79,11 +78,11 @@ func (s *TagService) FindManyByName(ctx context.Context, actor security.Subject,
 		return nil, err
 	}
 
-	return Tags(s.db).NewQuery().
+	return Tags(s.db).
 		Where("type", "=", taxonomy).
-		Where(func(named *model.Builder[Tag]) {
+		Where(func(named *TagQuery) {
 			named.WhereIn("name", anys(names)).
-				OrWhere(func(slugged *model.Builder[Tag]) {
+				OrWhere(func(slugged *TagQuery) {
 					slugged.WhereIn("slug", anys(slugs))
 				})
 		}).
@@ -110,10 +109,10 @@ func (s *TagService) FindInAnyTaxonomy(ctx context.Context, actor security.Subje
 		return nil, err
 	}
 
-	return Tags(s.db).NewQuery().
-		Where(func(named *model.Builder[Tag]) {
+	return Tags(s.db).
+		Where(func(named *TagQuery) {
 			named.WhereIn("name", anys(names)).
-				OrWhere(func(slugged *model.Builder[Tag]) {
+				OrWhere(func(slugged *TagQuery) {
 					slugged.WhereIn("slug", anys(slugs))
 				})
 		}).
@@ -202,12 +201,12 @@ func (s *TagService) Search(ctx context.Context, actor security.Subject, taxonom
 		limit = maxLimit
 	}
 
-	page := Tags(s.db).NewQuery().Where("type", "=", taxonomy)
+	page := Tags(s.db).Where("type", "=", taxonomy)
 	// The column is a constant of this package and the term is a binding, so
 	// nothing a caller wrote reaches the statement as text. Lowering both sides
 	// is what makes the answer the same on an engine whose LIKE ignores case and
 	// on one whose LIKE does not.
-	page.GetQuery().WhereRaw("lower(name) like ? escape '"+string(likeEscape)+"'", "%"+likeTerm(term)+"%")
+	page.Base().GetQuery().WhereRaw("lower(name) like ? escape '"+string(likeEscape)+"'", "%"+likeTerm(term)+"%")
 	return page.OrderBy(column).OrderBy("id").Limit(limit).Get(ctx, g)
 }
 
@@ -223,7 +222,7 @@ func (s *TagService) Taxonomies(ctx context.Context, actor security.Subject) ([]
 		return nil, err
 	}
 
-	found, err := Tags(s.db).NewQuery().
+	found, err := Tags(s.db).
 		GroupBy("type").
 		OrderBy("type").
 		Limit(MaxIDsPerQuery).
