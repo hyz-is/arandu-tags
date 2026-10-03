@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/arandu-io/framework/security"
+
+	"github.com/hyz-is/arandu-tags/internal/sequence"
 )
 
 // The ordering strategy, and the defect it exists to avoid.
@@ -121,7 +123,7 @@ func TestConcurrentCreatesNeverShareAPosition(t *testing.T) {
 	// Distinct is not enough on its own: a claim that skipped ahead on every
 	// retry would also be distinct. The counter is where every claim was
 	// counted, so it ends exactly this far along and no further.
-	counter, err := tagSequences(service.db).NewQuery().
+	counter, err := sequence.Counters(service.db).NewQuery().
 		WhereKey(sequenceKey("acme", "status")).
 		First(ctx, security.SystemGrant(TagView, "acme"))
 	if err != nil || counter == nil {

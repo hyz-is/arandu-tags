@@ -221,11 +221,12 @@ func TestEveryFunctionThatReachesTheModelHoldsAGrantOrTakesOne(t *testing.T) {
 // modelEntryPoints are the configured Model constructors of this package, and
 // modelTerminals the promoted writes on a row that already holds one.
 //
-// All three entry points are named. A Service that authorized before touching
+// All three entry points are named, the position counter's included although
+// it lives in an internal package. A Service that authorized before touching
 // the labels and then reached the associations or the position counter first
 // would pass an audit that knew about one of them.
 var (
-	modelEntryPoints = map[string]bool{"Tags": true, "Taggables": true, "tagSequences": true}
+	modelEntryPoints = map[string]bool{"Tags": true, "Taggables": true, "Counters": true}
 	modelTerminals   = map[string]bool{"Save": true, "Delete": true, "Restore": true, "Touch": true}
 )
 

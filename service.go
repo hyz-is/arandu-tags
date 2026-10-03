@@ -11,6 +11,8 @@ import (
 	"github.com/arandu-io/framework/security"
 	"github.com/arandu-io/framework/validation"
 	"github.com/arandu-io/hesape/database/model"
+
+	"github.com/hyz-is/arandu-tags/internal/sequence"
 )
 
 // Pagination bounds for List. A request that asks for everything gets the
@@ -292,10 +294,9 @@ func (s *TagService) List(ctx context.Context, actor security.Subject, taxonomy 
 		limit = maxLimit
 	}
 
-	rows := Tags(s.db)
-	page := rows.NewQuery().Where("type", "=", taxonomy)
+	page := Tags(s.db).NewQuery().Where("type", "=", taxonomy)
 	if q.Cursor != "" {
-		anchor, err := rows.NewQuery().WhereKey(q.Cursor).Value(ctx, g, column)
+		anchor, err := Tags(s.db).NewQuery().WhereKey(q.Cursor).Value(ctx, g, column)
 		if err != nil {
 			return nil, err
 		}
@@ -664,11 +665,10 @@ func (s *TagService) claimPositions(ctx context.Context, g security.Grant, taxon
 		return 0, fmt.Errorf("tags: %d positions were claimed, and at least one has to be", count)
 	}
 	key := sequenceKey(data.Tenant(g), taxonomy)
-	counters := tagSequences(s.db)
 	width := int64(count) * PositionStep
 
 	for attempt := 0; attempt < claimAttempts; attempt++ {
-		counter, err := counters.NewQuery().WhereKey(key).First(ctx, g)
+		counter, err := sequence.Counters(s.db).NewQuery().WhereKey(key).First(ctx, g)
 		if err != nil {
 			return 0, err
 		}
@@ -680,7 +680,7 @@ func (s *TagService) claimPositions(ctx context.Context, g security.Grant, taxon
 		}
 
 		claimed := counter.NextPosition
-		changed, err := counters.NewQuery().
+		changed, err := sequence.Counters(s.db).NewQuery().
 			WhereKey(key).
 			Where("next_position", "=", claimed).
 			Update(ctx, g, map[string]any{"next_position": claimed + width})
@@ -723,8 +723,8 @@ func waitToClaimAgain(ctx context.Context, attempt int) error {
 
 // seedSequence writes the counter row of a taxonomy that has none yet, and
 // returns whichever row ends up being there.
-func (s *TagService) seedSequence(ctx context.Context, g security.Grant, key, taxonomy string) (*tagSequence, error) {
-	instance, err := tagSequences(s.db).NewInstance(nil, false)
+func (s *TagService) seedSequence(ctx context.Context, g security.Grant, key, taxonomy string) (*sequence.Counter, error) {
+	instance, err := sequence.Counters(s.db).NewInstance(nil, false)
 	if err != nil {
 		return nil, err
 	}
@@ -737,7 +737,7 @@ func (s *TagService) seedSequence(ctx context.Context, g security.Grant, key, ta
 	if _, err := counter.Save(ctx, g); err == nil {
 		return counter, nil
 	} else {
-		existing, readErr := tagSequences(s.db).NewQuery().WhereKey(key).First(ctx, g)
+		existing, readErr := sequence.Counters(s.db).NewQuery().WhereKey(key).First(ctx, g)
 		if readErr != nil {
 			return nil, readErr
 		}

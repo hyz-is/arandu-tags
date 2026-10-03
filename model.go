@@ -9,6 +9,8 @@ import (
 
 	"github.com/arandu-io/framework/data"
 	"github.com/arandu-io/hesape/database/model"
+
+	"github.com/hyz-is/arandu-tags/internal/sequence"
 )
 
 // The names of the tables this package owns. They are constants because each
@@ -21,8 +23,10 @@ const (
 	TaggableTable = "taggables"
 	// tagSequenceTable holds the next position to hand out per taxonomy. It is
 	// not part of the API: it is how ordering is claimed, and a caller that
-	// wrote to it would be choosing positions the claim believes are free.
-	tagSequenceTable = "tag_sequences"
+	// wrote to it would be choosing positions the claim believes are free. Its
+	// entity lives in an internal package for the same reason, and the name is
+	// taken from there so the migration and the entity spell it once.
+	tagSequenceTable = sequence.TableName
 )
 
 // The shape a taxonomy name is held to, and the taxonomy a tag belongs to when
@@ -149,37 +153,6 @@ func Taggables(db *data.DB) *model.Model[Taggable] {
 	m := model.NewModel[Taggable](TaggableTable, db, db.GetQueryGrammar(), db.GetPostProcessor())
 	m.KeyType = "string"
 	m.Incrementing = false
-	return m
-}
-
-// tagSequence is the next position to hand out in one taxonomy.
-//
-// One row per tenant and taxonomy, and its identifier is the pair, so the row
-// a claim needs is addressed by key rather than searched for.
-type tagSequence struct {
-	model.Model[tagSequence]
-
-	// ID is the tenant and the taxonomy, joined.
-	ID string `db:"id"`
-
-	// TenantID is the customer the counter belongs to.
-	TenantID string `db:"tenant_id"`
-
-	// Type is the taxonomy the counter counts.
-	Type string `db:"type"`
-
-	// NextPosition is the position the next claim takes.
-	NextPosition int64 `db:"next_position"`
-}
-
-// tagSequences returns the configured model for the counter table.
-func tagSequences(db *data.DB) *model.Model[tagSequence] {
-	m := model.NewModel[tagSequence](tagSequenceTable, db, db.GetQueryGrammar(), db.GetPostProcessor())
-	m.KeyType = "string"
-	m.Incrementing = false
-	// The row carries no time: it is a counter, and when it last moved says
-	// nothing anybody reads.
-	m.Timestamps = false
 	return m
 }
 
