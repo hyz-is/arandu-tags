@@ -6,7 +6,7 @@ was cloned from -- `v0.4.0` and `v0.2.0`, with the entity renamed into them,
 describing a publishing migration and a Repository removal that both happened
 before `v0.1.0` here. They are gone.
 
-## Unreleased
+## v0.4.0
 
 ### Published views move out of `vendor/`
 

@@ -16,6 +16,8 @@ are gone.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-03
+
 ### Changed
 
 - **Breaking.** Each entity is a concrete type over Hesape's non-generic model.
