@@ -56,7 +56,35 @@ then deletes the old lines from `vendor-publish.lock` and changes the import in
 Framework `v0.46.4` and Hesape `v0.37.0` refuse a publication that carries the
 reserved name, so this cannot come back quietly.
 
-Nothing yet.
+### The entities are concrete types over the non-generic model
+
+Hesape `v0.47.0` removed the generic model layer, and this release requires
+Hesape `v0.48.0` and Framework `v0.50.2`. Go selects one Hesape version for the
+whole build, so an application takes this release after its own models have
+moved to the concrete model; `go run github.com/arandu-io/aru/cmd/model-upgrade@latest ./...`
+does the mechanical part of that.
+
+An application that uses this package through `New`, its routes and
+`TagService` changes nothing: every service method keeps its signature. What
+breaks is code that reached the tables directly through `Tags(db)` or
+`Taggables(db)`:
+
+| before | now |
+|---|---|
+| `func Tags(*data.DB) *model.Model[Tag]` | `func Tags(model.DB) *TagQuery`; a `*data.DB` is a `model.DB`, so the call itself compiles unchanged |
+| `func Taggables(*data.DB) *model.Model[Taggable]` | `func Taggables(model.DB) *TaggableQuery` |
+| `tags.Tags(db).NewQuery().Where(…)` | `tags.Tags(db).Where(…)` |
+| `tags.Tags(db).NewInstance(nil, false)`, then `.Entity` | `tags.Tags(db).New()`, which returns the `*Tag` |
+| `func(*model.Builder[tags.Tag])` in a grouped where | `func(*tags.TagQuery)` |
+| `q.GetQuery()` on a query | `q.Base().GetQuery()` |
+| `record.Exists`, a field | `record.Exists()` |
+| the fields and methods the generic model promoted on `Tag` and `Taggable` -- `KeyType`, `Incrementing`, `TenantColumn`, `Entity`, `NewQuery`, `Query`, `Where`, `First`, and the rest | gone; a row keeps `Save`, `Delete`, `Fresh`, `Replicate`, `Exists`, `Table` and the attribute methods of `model.Model` |
+
+`Get` on the query returns a `TagCollection`, which is a `[]*Tag`.
+
+**What changes without a compiler error.** A value copy of a `Tag` or a
+`Taggable` cannot be saved: the write is refused with `model.ErrUnwired`, where
+before it acted on the row the copy was taken from.
 
 ## v0.3.1
 

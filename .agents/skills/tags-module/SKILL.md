@@ -109,27 +109,32 @@ request.
 
 ## Changing the Model
 
-`Tag` embeds `model.Model[Tag]`, and `Tags(db)` is the one
-configured entry point for the table. Keep the application-generated key
-settings and tenant default visible there:
+`Tag` embeds `model.Model`, and its table is declared once beside it. Keep the
+application-generated key and the tenant default visible there:
 
 ```go
-func Tags(db *data.DB) *model.Model[Tag] {
-	m := model.NewModel[Tag]("tags", db, db.GetQueryGrammar(), db.GetPostProcessor())
-	m.KeyType = "string"
-	m.Incrementing = false
-	return m
-}
+var tagTable = model.NewTable(model.TableSpec{
+	Name:      TagTable,
+	New:       func() model.Entity { return new(Tag) },
+	ManualKey: true,
+})
 ```
 
-Do not set `TenantColumn` to `""`: this package owns tenant data. Model
+`func Tags(db model.DB) *TagQuery` is generated beside it in `TagQuery.go` by
+`aru model:build`, with `TagCollection` and the typed `Fresh` and `Replicate`.
+Do not edit the generated file: change the entity or the table and run
+`aru model:build`, and `aru model:build --check` fails while it is stale. A
+clause the generated methods cannot spell goes through `Base()`, inside this
+package. The position counter is the same shape in `internal/sequence`.
+
+Do not set `Global` on the table spec: this package owns tenant data. Model
 terminals require a Grant and apply `tenant_id`; the Service still calls
 `security.Authorize` first because the Model does not decide which Policy
 action the Grant represents.
 
-Keep rows as pointers after `NewInstance`, `First`, `Find`, or `Get`. The
-embedded Model's `Entity` points into that allocation, so copying the row and
-then calling a promoted terminal would act on the original.
+Keep rows as pointers after `New`, `First`, `Find`, or `Get`. A value copy of a
+row holds the embedded Model of the row it was copied from, and a write through
+it is refused with `model.ErrUnwired`.
 
 This table declares `created_at` but not `updated_at`. The Hesape Model stamps a
 timestamp only when the entity declares its column, so creation remains correct
@@ -166,8 +171,8 @@ if the field can make `New` fail.
 
 `Resource` and `Collection` in `model.go` are declared snapshots, not direct
 encoding of the entity. This also defines the safe copy boundary: Model-backed
-Service results stay as `*Tag`/`[]*Tag`, because copying an embedded
-Model preserves a back-pointer to the original allocation. A response snapshot
+Service results stay as `*Tag`/`[]*Tag`, because a copied row cannot be saved:
+its embedded Model belongs to the row it was copied from. A response snapshot
 reads only the explicit fields and cannot be saved.
 
 An encoder handed the entity would answer with whatever fields it happens to

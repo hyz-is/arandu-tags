@@ -33,13 +33,18 @@ one of them will not be merged, whatever else it improves.
 4. **`arandu.mod.toml` matches the code.** Adding an outbound call, a file
    write or a process means declaring it there in the same commit.
 
-CRUD stays on `Tags(db)` and its Builder. Add a Repository only for a
+CRUD stays on `Tags(db)` and the query it returns. Add a Repository only for a
 specialized complex query, read model, report, export or raw SQL contract; a
 wrapper around `Find`, `Get`, `Save` or `Delete` is a second data path.
 
-Model-backed entities stay pointers. Copying `Tag` also copies an embedded
-Model whose `Entity` still points to the original allocation. Response
-resources are the deliberate snapshot boundary; Service results are not.
+Model-backed entities stay pointers. A value copy of `Tag` holds the embedded
+Model of the row it was copied from, and a write through it is refused with
+`model.ErrUnwired`. Response resources are the deliberate snapshot boundary;
+Service results are not.
+
+`TagQuery.go`, `TaggableQuery.go` and `internal/sequence/CounterQuery.go` are
+written by `aru model:build` and are not edited by hand. Run it after changing
+an entity or its table; `aru model:build --check` fails while they are stale.
 
 ## Style
 
