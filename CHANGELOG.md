@@ -16,6 +16,16 @@ are gone.
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-10-09
+
+### Changed
+
+- Requires Framework v0.55.1, Hesape v0.52.0 and Kyse v0.33.0. The manifest's
+  framework floor is `>= 0.55`.
+- `FormState.FieldError` asks the embedded page by `FieldError`, the name
+  Hesape now gives it, instead of the deprecated `First`. It answers the same
+  message.
+
 ## [0.4.1] - 2026-10-09
 
 ### Added

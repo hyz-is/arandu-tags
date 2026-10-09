@@ -6,6 +6,29 @@ was cloned from -- `v0.4.0` and `v0.2.0`, with the entity renamed into them,
 describing a publishing migration and a Repository removal that both happened
 before `v0.1.0` here. They are gone.
 
+## v0.4.2
+
+No symbol, route, migration, action, policy decision or tenant rule changes.
+What changes is what an application compiles against: updating to this release
+selects Framework v0.55.1, Hesape v0.52.0 and Kyse v0.33.0.
+
+Those releases can stop an application that booted before from booting, and
+this package cannot make that change for it. Read their upgrade guides from the
+versions the application required before. The ones that reach a running
+deployment:
+
+- Framework v0.55.0 makes `Configuration.Session` a `bootstrap.Session` with
+  `Secure` and `Lifetime`, refuses `SESSION_TTL`, and stops the boot on a
+  `SESSION_*` variable the session store does not read. An application that
+  built its store from `SESSION_TTL` builds it with `fw.Session.Lifetime` and
+  writes `SESSION_LIFETIME` in minutes.
+- Framework v0.54.0 stops the boot on a boolean setting that does not read as
+  one, such as `SESSION_SECURE_COOKIE=sometimes`.
+- Hesape v0.52.0 removes the names it deprecated in v0.50.1 and v0.50.2.
+
+The views this package publishes are unchanged, so there is nothing to
+republish.
+
 ## v0.4.1
 
 Nothing to change in an application: this release touches skills, not Go code.
