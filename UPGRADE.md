@@ -6,6 +6,13 @@ was cloned from -- `v0.4.0` and `v0.2.0`, with the entity renamed into them,
 describing a publishing migration and a Repository removal that both happened
 before `v0.1.0` here. They are gone.
 
+## v0.4.1
+
+Nothing to change in an application: this release touches skills, not Go code.
+`aru skills:sync` now offers `tags-package` to a project that requires this
+version. An application wired from the earlier copy of that skill never booted,
+because it left out `CSRF`; one that booted already passes it.
+
 ## v0.4.0
 
 ### Published views move out of `vendor/`

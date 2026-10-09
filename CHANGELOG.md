@@ -16,6 +16,24 @@ are gone.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-09
+
+### Added
+
+- The `arandu-ecosystem` skill: the shared architecture an application keeps
+  before it builds a second implementation of what an Arandu module owns.
+
+### Changed
+
+- The `tags-package` skill carries `audience: app` under `metadata` in its
+  frontmatter, which is what `aru skills:sync` reads to copy it into an
+  application whose `go.mod` requires this package. No other skill is marked.
+
+### Fixed
+
+- The wiring in the `tags-package` skill passes `CSRF: csrf`. Without it `New`
+  refused the configuration at boot, because `Config.CSRF` is required.
+
 ## [0.4.0] - 2026-10-03
 
 ### Changed
