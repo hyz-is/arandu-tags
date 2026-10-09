@@ -281,15 +281,28 @@ func (m *Module) index(ctx *fhttp.Context) error {
 		return m.answer(ctx, err)
 	}
 	labels := m.Labels(m.locale(ctx.Request))
+	links := make([]TaxonomyLink, 0, len(taxonomies))
+	for _, each := range taxonomies {
+		links = append(links, TaxonomyLink{Taxonomy: each, Label: labels.Taxonomy(each), URL: m.listingOf(ctx, each)})
+	}
+	next := ""
+	if cursor != "" {
+		next = m.listingOf(ctx, taxonomy) + "&cursor=" + url.QueryEscape(cursor)
+	}
 	return ctx.View(ViewIndex, IndexPageData{
-		Page:       m.page(ctx, labels.T("screen.index_title")),
-		Prefix:     m.cfg.Prefix,
-		Labels:     labels,
-		Taxonomy:   taxonomy,
-		Taxonomies: taxonomies,
-		Search:     search,
-		Rows:       m.rows(labels, records),
-		Next:       cursor,
+		Page:          m.page(ctx, labels.T("screen.index_title")),
+		Prefix:        m.cfg.Prefix,
+		Labels:        labels,
+		Taxonomy:      taxonomy,
+		Taxonomies:    taxonomies,
+		Search:        search,
+		Rows:          m.linked(ctx, m.rows(labels, records)),
+		Next:          cursor,
+		TaxonomyLinks: links,
+		SearchURL:     ctx.URL("tags.index"),
+		StoreURL:      ctx.URL("tags.store"),
+		OrderURL:      m.orderingOf(ctx, taxonomy),
+		NextURL:       next,
 	})
 }
 
@@ -304,11 +317,15 @@ func (m *Module) show(ctx *fhttp.Context) error {
 	}
 
 	labels := m.Labels(m.locale(ctx.Request))
+	row := m.linked(ctx, []Row{m.row(labels, record)})[0]
 	return ctx.View(ViewEdit, EditPageData{
-		Page:   m.page(ctx, labels.T("screen.edit_title")),
-		Prefix: m.cfg.Prefix,
-		Labels: labels,
-		Row:    m.row(labels, record),
+		Page:      m.page(ctx, labels.T("screen.edit_title")),
+		Prefix:    m.cfg.Prefix,
+		Labels:    labels,
+		Row:       row,
+		IndexURL:  m.listingOf(ctx, record.Type),
+		UpdateURL: ctx.URL("tags.update", url.PathEscape(record.ID)),
+		DeleteURL: ctx.URL("tags.destroy", url.PathEscape(record.ID)),
 	})
 }
 
@@ -323,7 +340,7 @@ func (m *Module) store(ctx *fhttp.Context) error {
 	if ctx.WantsJSON() {
 		return ctx.JSON(stdhttp.StatusCreated, resourceFromPointer(record))
 	}
-	return ctx.Redirect(m.listingOf(record.Type))
+	return ctx.Redirect(m.listingOf(ctx, record.Type))
 }
 
 // update renames one record.
@@ -337,7 +354,7 @@ func (m *Module) update(ctx *fhttp.Context) error {
 	if ctx.WantsJSON() {
 		return ctx.JSON(stdhttp.StatusOK, resourceFromPointer(record))
 	}
-	return ctx.Redirect(m.listingOf(record.Type))
+	return ctx.Redirect(m.listingOf(ctx, record.Type))
 }
 
 // destroy removes one record and every association to it.
@@ -357,7 +374,7 @@ func (m *Module) destroy(ctx *fhttp.Context) error {
 	if ctx.WantsJSON() {
 		return ctx.Status(stdhttp.StatusNoContent)
 	}
-	return ctx.Redirect(m.listingOf(record.Type))
+	return ctx.Redirect(m.listingOf(ctx, record.Type))
 }
 
 // order answers the screen a whole taxonomy is rearranged on.
@@ -379,11 +396,13 @@ func (m *Module) order(ctx *fhttp.Context) error {
 
 	labels := m.Labels(m.locale(ctx.Request))
 	return ctx.View(ViewOrder, OrderPageData{
-		Page:     m.page(ctx, labels.T("screen.order_title")),
-		Prefix:   m.cfg.Prefix,
-		Labels:   labels,
-		Taxonomy: taxonomy,
-		Rows:     m.rows(labels, records),
+		Page:       m.page(ctx, labels.T("screen.order_title")),
+		Prefix:     m.cfg.Prefix,
+		Labels:     labels,
+		Taxonomy:   taxonomy,
+		Rows:       m.linked(ctx, m.rows(labels, records)),
+		IndexURL:   m.listingOf(ctx, taxonomy),
+		ReorderURL: ctx.URL("tags.reorder"),
 	})
 }
 
@@ -403,7 +422,7 @@ func (m *Module) reorder(ctx *fhttp.Context) error {
 	if ctx.WantsJSON() {
 		return ctx.JSON(stdhttp.StatusOK, collectionFromPointers(records, ""))
 	}
-	return ctx.Redirect(m.orderingOf(taxonomy))
+	return ctx.Redirect(m.orderingOf(ctx, taxonomy))
 }
 
 // move sends one record one step, or all the way, within its taxonomy.
@@ -438,17 +457,38 @@ func (m *Module) move(ctx *fhttp.Context) error {
 	if ctx.WantsJSON() {
 		return ctx.JSON(stdhttp.StatusOK, resourceFromPointer(record))
 	}
-	return ctx.Redirect(m.orderingOf(record.Type))
+	return ctx.Redirect(m.orderingOf(ctx, record.Type))
 }
 
-// listingOf and orderingOf are the addresses this module sends a browser back
-// to, built from the configured prefix rather than written out.
-func (m *Module) listingOf(taxonomy string) string {
-	return m.cfg.Prefix + "?type=" + url.QueryEscape(taxonomy)
+// listingOf and orderingOf are the listing and the ordering screen of one
+// taxonomy: where this module sends a browser back to, and what its screens link
+// to. One composition serves both, so a redirect and a link cannot disagree
+// about an address.
+//
+// The path comes from the route's name rather than from the prefix, and the
+// taxonomy is escaped here, in Go: a screen writes the result as one value, and
+// a value it composed itself behind text in an address is one the view compiler
+// refuses.
+func (m *Module) listingOf(ctx *fhttp.Context, taxonomy string) string {
+	return ctx.URL("tags.index") + "?type=" + url.QueryEscape(taxonomy)
 }
 
-func (m *Module) orderingOf(taxonomy string) string {
-	return m.cfg.Prefix + "/order?type=" + url.QueryEscape(taxonomy)
+func (m *Module) orderingOf(ctx *fhttp.Context, taxonomy string) string {
+	return ctx.URL("tags.order") + "?type=" + url.QueryEscape(taxonomy)
+}
+
+// linked fills in the addresses of rows a screen of this module draws.
+//
+// The identifier is escaped as a path segment before it is put in one: the
+// route table fills a parameter with what it is handed, and an identifier is
+// whatever the application wrote.
+func (m *Module) linked(ctx *fhttp.Context, rows []Row) []Row {
+	for i := range rows {
+		id := url.PathEscape(rows[i].ID)
+		rows[i].URL = ctx.URL("tags.show", id)
+		rows[i].MoveURL = ctx.URL("tags.move", id)
+	}
+	return rows
 }
 
 // locale is what the request asked to be answered in.

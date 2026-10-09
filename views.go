@@ -129,14 +129,34 @@ type Row struct {
 	// is false everywhere else, because everywhere else there is no entity for
 	// it to be about.
 	Held bool
+
+	// URL is the address of this label's own screen, the form that renames it,
+	// and MoveURL is where the ordering screen posts a step for it. Each is
+	// composed whole by the handler that draws the row, so the markup writes it
+	// as one value. Both are empty on a row an application snapshots itself,
+	// which draws no link to either.
+	URL     string
+	MoveURL string
+}
+
+// TaxonomyLink is one taxonomy as the listing draws it: a link to the listing
+// narrowed to it.
+type TaxonomyLink struct {
+	// Taxonomy is the taxonomy as stored, and Label is it as a person reads it.
+	Taxonomy string
+	Label    string
+	// URL is the listing of this taxonomy.
+	URL string
 }
 
 // IndexPageData is what the listing screen is handed.
 type IndexPageData struct {
 	view.Page
 
-	// Prefix is where this module answers, so the markup composes its own
-	// addresses instead of hard-coding one the configuration can change.
+	// Prefix is where this module answers. The markup does not compose an
+	// address from it: every address the screen writes is one of the URL
+	// fields, composed whole by the handler, because a value interpolated
+	// behind text in an address is a value the view compiler cannot check.
 	Prefix string
 	// Labels are the sentences this screen draws, resolved for the locale the
 	// request asked for.
@@ -152,6 +172,16 @@ type IndexPageData struct {
 	// on the last one.
 	Rows []Row
 	Next string
+
+	// TaxonomyLinks are the taxonomies, each with the address of its listing.
+	TaxonomyLinks []TaxonomyLink
+	// SearchURL is where the search form asks, StoreURL where the create form
+	// posts, and OrderURL the ordering screen of this taxonomy.
+	SearchURL string
+	StoreURL  string
+	OrderURL  string
+	// NextURL is the following page, and empty on the last one.
+	NextURL string
 }
 
 // EditPageData is what the rename screen is handed.
@@ -162,6 +192,12 @@ type EditPageData struct {
 	Labels Labels
 	// Row is the label being renamed.
 	Row Row
+
+	// IndexURL is the listing of the label's taxonomy, UpdateURL where the
+	// rename is sent, and DeleteURL where the delete is.
+	IndexURL  string
+	UpdateURL string
+	DeleteURL string
 }
 
 // OrderPageData is what the ordering screen is handed.
@@ -174,6 +210,11 @@ type OrderPageData struct {
 	Taxonomy string
 	// Rows are every label of it, in the order they are in.
 	Rows []Row
+
+	// IndexURL is the listing of this taxonomy, and ReorderURL where the whole
+	// order is posted.
+	IndexURL   string
+	ReorderURL string
 }
 
 // PickerData is what the association fragment is handed.

@@ -18,7 +18,7 @@ type OrderData = tags.OrderPageData
 @section('content')
 	<div>
 		<a class="text-muted-foreground text-sm hover:underline"
-		   href="{{ .Prefix }}?type={{ .Taxonomy }}">{{ .Labels.T("control.back") }}</a>
+		   href="{{ .IndexURL }}">{{ .Labels.T("control.back") }}</a>
 		<h1 class="mt-2 text-2xl font-semibold tracking-tight">{{ .Labels.T("screen.order_title") }}</h1>
 		<p class="text-muted-foreground mt-1 text-sm">{{ .Labels.T("screen.order_lead") }}</p>
 	</div>
@@ -38,7 +38,7 @@ type OrderData = tags.OrderPageData
 						<span class="text-muted-foreground ml-2 font-mono text-xs">{{ row.Position }}</span>
 					</div>
 					<div class="flex items-center gap-1">
-						<form hx-post="{{ .Prefix }}/{{ row.ID }}/move">
+						<form hx-post="{{ row.MoveURL }}">
 							@csrf
 							<input type="hidden" name="direction" value="start">
 							{!! components.Button(components.ButtonProps{
@@ -49,7 +49,7 @@ type OrderData = tags.OrderPageData
 								Disabled: row.First,
 							}) !!}
 						</form>
-						<form hx-post="{{ .Prefix }}/{{ row.ID }}/move">
+						<form hx-post="{{ row.MoveURL }}">
 							@csrf
 							<input type="hidden" name="direction" value="up">
 							{!! components.Button(components.ButtonProps{
@@ -60,7 +60,7 @@ type OrderData = tags.OrderPageData
 								Disabled: row.First,
 							}) !!}
 						</form>
-						<form hx-post="{{ .Prefix }}/{{ row.ID }}/move">
+						<form hx-post="{{ row.MoveURL }}">
 							@csrf
 							<input type="hidden" name="direction" value="down">
 							{!! components.Button(components.ButtonProps{
@@ -71,7 +71,7 @@ type OrderData = tags.OrderPageData
 								Disabled: row.Last,
 							}) !!}
 						</form>
-						<form hx-post="{{ .Prefix }}/{{ row.ID }}/move">
+						<form hx-post="{{ row.MoveURL }}">
 							@csrf
 							<input type="hidden" name="direction" value="end">
 							{!! components.Button(components.ButtonProps{
@@ -91,7 +91,7 @@ type OrderData = tags.OrderPageData
 		     several labels before it was ready: the identifiers go in the order
 		     they are read here, and the server writes one block of positions
 		     rather than one move per row. --}}
-		<form class="mt-8 border-t pt-6" hx-post="{{ .Prefix }}/order">
+		<form class="mt-8 border-t pt-6" hx-post="{{ .ReorderURL }}">
 			@csrf
 			<input type="hidden" name="type" value="{{ .Taxonomy }}">
 			@foreach(.Rows as row)
