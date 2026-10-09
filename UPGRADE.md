@@ -6,6 +6,72 @@ was cloned from -- `v0.4.0` and `v0.2.0`, with the entity renamed into them,
 describing a publishing migration and a Repository removal that both happened
 before `v0.1.0` here. They are gone.
 
+## v0.5.0
+
+No symbol is removed or changed, and no route, migration, action, policy
+decision or tenant rule changes. What changes is the markup this package
+publishes, and **a project that published the views republishes them**.
+
+### Why
+
+aru v0.69 refuses a value interpolated into an address behind text that does not
+yet fix the scheme and the host. Seven attributes of the published views did
+that, `{{ .Prefix }}/{{ row.ID }}` and its siblings, so a project that
+published them stops at `aru view:build`:
+
+```
+resources/views/modules/tags/edit.kyse.go:45: this value is written into "hx-patch" before the scheme and the host of the address are fixed
+```
+
+The page data now carries each address whole, and the views write it as one
+value.
+
+### Republish
+
+If the views compiled before are still in `storage/framework/views/modules/tags`,
+publish over them:
+
+```sh
+aru vendor:publish --tag=view --apply
+aru view:build
+```
+
+A file you never edited is updated. One you edited outside its
+`arandu:begin custom` markers is reported as a conflict and left alone; publish
+it with `--force`, which keeps what is inside the markers, and bring your other
+edits across by hand.
+
+If they are not -- a fresh checkout, or a CI run, with aru v0.69 or later --
+`aru vendor:publish` stops on the same refusal, because it compiles the view
+layer before it asks the application what to publish. Move the four files out of
+`resources/views/modules/tags/` first, keeping a copy of your edits, then run the
+two commands above. The import of `storage/framework/views/modules/tags` in
+`bootstrap/app.go` stays as it is.
+
+### A view you edited
+
+Each composed address becomes the field that carries it:
+
+| was | is |
+| --- | --- |
+| `{{ .Prefix }}?type={{ .Row.Taxonomy }}` (rename screen) | `{{ .IndexURL }}` |
+| `hx-patch="{{ .Prefix }}/{{ .Row.ID }}"` | `{{ .UpdateURL }}` |
+| `hx-delete="{{ .Prefix }}/{{ .Row.ID }}"` | `{{ .DeleteURL }}` |
+| `{{ .Prefix }}/order?type={{ .Taxonomy }}` | `{{ .OrderURL }}` |
+| `@foreach(.Taxonomies as taxonomy)` with `{{ .Prefix }}?type={{ taxonomy }}` and `.Labels.Taxonomy(taxonomy)` | `@foreach(.TaxonomyLinks as taxonomy)` with `{{ taxonomy.URL }}` and `{{ taxonomy.Label }}` |
+| `action="{{ .Prefix }}"`, `method="get"` | `{{ .SearchURL }}` |
+| `action="{{ .Prefix }}"`, `method="post"` | `{{ .StoreURL }}` |
+| `{{ .Prefix }}/{{ row.ID }}` | `{{ row.URL }}` |
+| `@if(.Next != "")` with `{{ .Prefix }}?type={{ .Taxonomy }}&amp;cursor={{ .Next }}` | `@if(.NextURL != "")` with `{{ .NextURL }}` |
+| `{{ .Prefix }}?type={{ .Taxonomy }}` (ordering screen) | `{{ .IndexURL }}` |
+| `hx-post="{{ .Prefix }}/{{ row.ID }}/move"` | `{{ row.MoveURL }}` |
+| `hx-post="{{ .Prefix }}/order"` | `{{ .ReorderURL }}` |
+
+`Prefix`, `Taxonomies` and `Next` are still filled, so a view compiled before
+keeps compiling against this release until it is republished. A row an
+application snapshots itself with `Rows` or `PickerRows` has empty `URL` and
+`MoveURL`; the picker writes neither.
+
 ## v0.4.2
 
 No symbol, route, migration, action, policy decision or tenant rule changes.

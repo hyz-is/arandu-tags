@@ -16,6 +16,38 @@ are gone.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-09
+
+### Added
+
+- The page data carries every address its screen writes, composed whole by the
+  handler: `Row.URL` and `Row.MoveURL`; `IndexPageData.TaxonomyLinks`,
+  `SearchURL`, `StoreURL`, `OrderURL` and `NextURL`; `EditPageData.IndexURL`,
+  `UpdateURL` and `DeleteURL`; `OrderPageData.IndexURL` and `ReorderURL`. The
+  new `TaxonomyLink` is one taxonomy of the listing with its address. Paths
+  come from the route names, and the identifier, taxonomy and cursor are
+  escaped in Go.
+
+### Changed
+
+- The published views write each address as one interpolation of those fields
+  and no longer compose one from `Prefix`. `Prefix`, `Taxonomies` and `Next`
+  stay on the page data with their meaning.
+- The redirects after a write are built from the route names, through the same
+  composition the screens link with.
+- `TestEveryPublishedViewCompiles` compiles the published views with aru
+  v0.69.3 in a scratch project made from skeleton v0.34.1, on every run,
+  instead of skipping when no `storage/` was present.
+
+### Fixed
+
+- The published views compile with aru v0.69. Seven attributes interpolated
+  the identifier behind `{{ .Prefix }}/` -- the rename and delete forms, the
+  listing links and the four move buttons -- and `aru view:build` refused each
+  one because the text in front did not fix the address before the value.
+  A project that already published them republishes them; `UPGRADE.md` has the
+  steps.
+
 ## [0.4.2] - 2026-10-09
 
 ### Changed
