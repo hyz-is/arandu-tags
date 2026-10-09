@@ -52,9 +52,6 @@ func moduleWith(t *testing.T, cfg tags.Config) *tags.Module {
 	t.Helper()
 
 	sessions := security.NewSessionStore([]byte(sessionKey), time.Hour, false, security.NewMemoryBackend())
-	if cfg.CSRF == nil {
-		cfg.CSRF = security.NewCSRF([]byte(sessionKey), time.Hour)
-	}
 	m, err := tags.New(cfg, data.Wrap(nil, data.DialectSQLite), sessions)
 	if err != nil {
 		t.Fatalf("building the module: %v", err)

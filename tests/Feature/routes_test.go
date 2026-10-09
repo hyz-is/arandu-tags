@@ -36,22 +36,13 @@ const appKey = "0123456789abcdef0123456789abcdef"
 // repository that can still fix it.
 const reservedPrefix = "/_arandu"
 
-// wired fills in the collaborators every configuration needs, so a test that
-// cares about one setting writes that setting and nothing else.
-func wired(cfg tags.Config) tags.Config {
-	if cfg.CSRF == nil {
-		cfg.CSRF = security.NewCSRF([]byte(appKey), time.Hour)
-	}
-	return cfg
-}
-
 // mount builds the module and returns a router with its routes registered.
 func mount(t *testing.T, cfg tags.Config) *fhttp.Router {
 	t.Helper()
 
 	sessions := security.NewSessionStore([]byte(appKey), time.Hour, false, security.NewMemoryBackend())
 
-	module, err := tags.New(wired(cfg), data.Wrap(nil, data.DialectSQLite), sessions)
+	module, err := tags.New(cfg, data.Wrap(nil, data.DialectSQLite), sessions)
 	if err != nil {
 		t.Fatalf("building the module: %v", err)
 	}
@@ -185,13 +176,10 @@ func TestNewRefusesAWiringThatCannotWork(t *testing.T) {
 
 	sessions := security.NewSessionStore([]byte(appKey), time.Hour, false, security.NewMemoryBackend())
 	handle := data.Wrap(nil, data.DialectSQLite)
-	valid := wired(tags.Config{Tenant: "acme"})
+	valid := tags.Config{Tenant: "acme"}
 
 	if _, err := tags.New(tags.Config{}, handle, sessions); err == nil {
 		t.Error("a configuration with no tenant was accepted")
-	}
-	if _, err := tags.New(tags.Config{Tenant: "acme"}, handle, sessions); err == nil {
-		t.Error("a configuration with no CSRF issuer was accepted, and every screen this module draws writes")
 	}
 	if _, err := tags.New(valid, nil, sessions); err == nil {
 		t.Error("a nil database handle was accepted")
@@ -211,7 +199,7 @@ func TestNewRefusesARoutePrefixThatCannotBeRegistered(t *testing.T) {
 	handle := data.Wrap(nil, data.DialectSQLite)
 
 	for _, prefix := range []string{"/widgets{", "/widgets/{id}"} {
-		if _, err := tags.New(wired(tags.Config{Tenant: "acme", Prefix: prefix}), handle, sessions); err == nil {
+		if _, err := tags.New(tags.Config{Tenant: "acme", Prefix: prefix}, handle, sessions); err == nil {
 			t.Errorf("New accepted route prefix %q, which would panic during route registration", prefix)
 		}
 	}
@@ -221,7 +209,7 @@ func TestTheModuleDeclaresItsSchema(t *testing.T) {
 	t.Parallel()
 
 	sessions := security.NewSessionStore([]byte(appKey), time.Hour, false, security.NewMemoryBackend())
-	module, err := tags.New(wired(tags.Config{Tenant: "acme"}), data.Wrap(nil, data.DialectSQLite), sessions)
+	module, err := tags.New(tags.Config{Tenant: "acme"}, data.Wrap(nil, data.DialectSQLite), sessions)
 	if err != nil {
 		t.Fatalf("building the module: %v", err)
 	}

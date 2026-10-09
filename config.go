@@ -49,11 +49,16 @@ type Config struct {
 	// somebody wrote and was told about.
 	PageSize int
 
-	// CSRF issues the token every form on these screens carries.
+	// CSRF is not read.
 	//
-	// It is required, because every screen here writes: a page rendered without
-	// a token is a page whose buttons the application refuses, and finding that
-	// out from a form that does nothing is worse than finding it out at boot.
+	// The token every form on these screens carries is the one the middleware
+	// that protects forms issued for the request, read off its context. That
+	// middleware is the one that checks the submission, so it is the one whose
+	// binding the token has to carry -- including the guest binding of a visitor
+	// with no session, which an issuer handed to this package could not see.
+	//
+	// Deprecated: leave it out. It is accepted and ignored, and an application
+	// that set it keeps compiling.
 	CSRF *security.CSRF
 
 	// Translator is the application's own catalogue, asked before the one this
@@ -120,9 +125,6 @@ func (c Config) Validate() error {
 	}
 	if c.PageSize < 0 || c.PageSize > MaxPageSize {
 		return fmt.Errorf("tags: Config.PageSize is %d, and has to be between 0 and %d, where 0 means %d", c.PageSize, MaxPageSize, DefaultPageSize)
-	}
-	if c.CSRF == nil {
-		return fmt.Errorf("tags: Config.CSRF is required: every screen this module draws writes, and a form with no token is a form the application refuses")
 	}
 	return nil
 }

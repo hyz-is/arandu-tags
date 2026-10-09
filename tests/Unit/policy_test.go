@@ -427,23 +427,20 @@ func TestTheRequestValidatesItsInput(t *testing.T) {
 func TestTheConfigurationRefusesWhatCannotWork(t *testing.T) {
 	t.Parallel()
 
-	issuer := security.NewCSRF([]byte("0123456789abcdef0123456789abcdef"), time.Hour)
 	for name, cfg := range map[string]tags.Config{
-		"no tenant":        {CSRF: issuer},
-		"tenant with a /":  {Tenant: "acme/reports", CSRF: issuer},
-		"tenant uppercase": {Tenant: "Acme", CSRF: issuer},
-		"relative prefix":  {Tenant: "acme", Prefix: "tags", CSRF: issuer},
-		"page size too big": {Tenant: "acme", CSRF: issuer,
-			PageSize: tags.MaxPageSize + 1},
-		"negative page size": {Tenant: "acme", CSRF: issuer, PageSize: -1},
-		"no CSRF issuer":     {Tenant: "acme"},
+		"no tenant":          {},
+		"tenant with a /":    {Tenant: "acme/reports"},
+		"tenant uppercase":   {Tenant: "Acme"},
+		"relative prefix":    {Tenant: "acme", Prefix: "tags"},
+		"page size too big":  {Tenant: "acme", PageSize: tags.MaxPageSize + 1},
+		"negative page size": {Tenant: "acme", PageSize: -1},
 	} {
 		if err := cfg.Validate(); err == nil {
 			t.Errorf("the configuration with %s was accepted", name)
 		}
 	}
 
-	if err := (tags.Config{Tenant: "acme", CSRF: issuer}).Validate(); err != nil {
+	if err := (tags.Config{Tenant: "acme"}).Validate(); err != nil {
 		t.Fatalf("a valid configuration was refused: %v", err)
 	}
 }
@@ -458,12 +455,11 @@ func TestTheShippedPolicyIsTheOneAModuleUsesUntilAnApplicationWritesOne(t *testi
 	t.Parallel()
 
 	ctx := context.Background()
-	issuer := security.NewCSRF([]byte("0123456789abcdef0123456789abcdef"), time.Hour)
 	sessions := security.NewSessionStore([]byte("0123456789abcdef0123456789abcdef"), time.Hour, false, security.NewMemoryBackend())
 
 	// Nothing said about rules, and the handle wraps nothing: a refusal that
 	// arrives rather than a panic is a refusal that happened before the Model.
-	closed, err := tags.New(tags.Config{Tenant: "acme", CSRF: issuer}, nilHandle(), sessions)
+	closed, err := tags.New(tags.Config{Tenant: "acme"}, nilHandle(), sessions)
 	if err != nil {
 		t.Fatalf("building the module: %v", err)
 	}
@@ -473,7 +469,7 @@ func TestTheShippedPolicyIsTheOneAModuleUsesUntilAnApplicationWritesOne(t *testi
 
 	// And an application's own policy is the one consulted, which is what makes
 	// the package installable without forking it.
-	open, err := tags.New(tags.Config{Tenant: "acme", CSRF: issuer, Policy: countingPolicy{}}, nilHandle(), sessions)
+	open, err := tags.New(tags.Config{Tenant: "acme", Policy: countingPolicy{}}, nilHandle(), sessions)
 	if err != nil {
 		t.Fatalf("building the module with a policy: %v", err)
 	}
