@@ -351,9 +351,9 @@ func (d OrderPageData) Form() FormState { return FormState{Page: d.Page} }
 // what a screen should say in a product it has never seen.
 func (m *Module) Publishes() []foundation.Publication {
 	// From and To are what make the archive and the destination two different
-	// paths. They have to be: go mod publishes no file whose path carries a
-	// segment named vendor, and the destination -- the address an application
-	// looks for a package's views at -- carries one.
+	// paths. They have to be: the archive is a directory of this repository,
+	// and the destination is the address an application looks for an installed
+	// package's views at, which viewRoot and viewPrefix explain.
 	return []foundation.Publication{{
 		Tag:   foundation.PublishView,
 		Files: viewSources,
@@ -427,20 +427,19 @@ func readArchive() (paths, names []string) {
 
 // publishedPath turns an archive path into the path the file is written at.
 //
-// The archive keeps the views under a directory with no vendor segment, because
-// go mod publishes no path that has one. The destination has it, because that is
-// where an application looks for a package's views.
+// The archive keeps the views under viewRoot, a directory of this repository.
+// The destination is under viewPrefix, because that is where an application
+// looks for an installed package's views.
 func publishedPath(path string) string {
 	return viewPrefix + strings.TrimPrefix(path, viewRoot)
 }
 
 // viewName turns an archive path into the name the view is registered under.
 //
-// The name comes from where the file is written, not from where it is kept:
-// the two differ because go mod refuses to publish a path with a vendor
-// segment, and the destination has one.
+// The name comes from where the file is written, not from where it is kept,
+// because the view compiler names a view by its path in the project.
 //
-//	resources/publish/index.kyse.go -> vendor.tags.index
+//	resources/publish/index.kyse.go -> modules.tags.index
 func viewName(path string) string {
 	name := strings.TrimPrefix(strings.TrimPrefix(path, viewRoot), "/")
 	name = strings.TrimPrefix(viewPrefix, "resources/views/") + "/" + name
