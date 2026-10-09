@@ -289,3 +289,27 @@ func TestEveryScreenIsRenderedByANameTheArchiveCarries(t *testing.T) {
 		t.Fatalf("the archive carries %v and the package renders %v", declared, rendered)
 	}
 }
+
+// TestTheFormAnswersTheFirstMessageOfAnInput holds what an input reads through
+// Form: the first message validation wrote for its name, and nothing for a
+// name it accepted.
+func TestTheFormAnswersTheFirstMessageOfAnInput(t *testing.T) {
+	t.Parallel()
+
+	page := view.Page{Errors: map[string][]string{
+		"name": {"The name is required.", "The name is too long."},
+	}}
+
+	for _, form := range []tags.FormState{
+		tags.IndexPageData{Page: page}.Form(),
+		tags.EditPageData{Page: page}.Form(),
+		tags.OrderPageData{Page: page}.Form(),
+	} {
+		if got, want := form.FieldError("name"), "The name is required."; got != want {
+			t.Errorf("FieldError(name) = %q, want %q", got, want)
+		}
+		if got := form.FieldError("taxonomy"); got != "" {
+			t.Errorf("FieldError(taxonomy) = %q for an input nothing rejected, want empty", got)
+		}
+	}
+}
