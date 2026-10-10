@@ -100,7 +100,6 @@ func run(ctx context.Context) error {
 	key := []byte("0123456789abcdef0123456789abcdef")
 	module, err := tags.New(tags.Config{
 		Tenant: tenant,
-		CSRF:   security.NewCSRF(key, time.Hour),
 		Policy: TagRules{},
 	},
 		data.Wrap(pool, data.DialectSQLite),

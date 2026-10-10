@@ -34,7 +34,6 @@ The construction, in `Build`, after the session store exists and before
 ```go
 	tagsModule, err := tags.New(tags.Config{
 		Tenant: cfg.Auth.Tenant,
-		CSRF:   csrf,
 		// The rules. Nil is the policy this package ships, which denies
 		// everything -- see "Write the policy" below.
 		Policy: TagRules{},
@@ -108,7 +107,6 @@ boot rather than answering the first request that reaches one of them with a
 | field | required | meaning |
 | --- | --- | --- |
 | `Tenant` | yes | the customer a visitor with no session is read as. From the application's configuration, never from the request. |
-| `CSRF` | yes | the issuer of the token every form on these screens carries. |
 | `Prefix` | no | where the routes are mounted. Defaults to `/tags`. |
 | `PageSize` | no | how many records one page answers with. Defaults to 25, refused above 200. |
 | `Policy` | no | the rules. Nil is `TagPolicy`, which denies everything. |
@@ -251,6 +249,14 @@ open room at the front, which is the work sparse positions exist to avoid.
 
 Four are published: the listing, the form that renames one label, the
 reordering screen, and a picker fragment.
+
+The three pages are drawn inside your layout with the `view.Page` that
+`view.New` builds for your own screens. The CSRF token is the one
+`middleware.CSRFProtect` issued for the request, so the routes have to sit
+behind it, as every route of the application skeleton does. The brand, sign-in,
+sign-out and register links come from the routes you named `home`,
+`auth.login`, `auth.logout` and `auth.register`; one you did not register draws
+no link.
 
 The picker is the one no route of this module answers, for the same reason
 nothing here attaches over HTTP. You draw it inside a page of your own, from a
