@@ -6,6 +6,40 @@ was cloned from -- `v0.4.0` and `v0.2.0`, with the entity renamed into them,
 describing a publishing migration and a Repository removal that both happened
 before `v0.1.0` here. They are gone.
 
+## v0.5.1
+
+No symbol is removed or changed, and no route, migration, action, policy
+decision or tenant rule changes. The published views do not change, so nothing
+is republished.
+
+### `Config.CSRF` is deprecated
+
+The screens take the CSRF token `middleware.CSRFProtect` put on the request,
+so the issuer passed in `Config` is not read. Remove the line:
+
+```go
+tags.New(tags.Config{
+	Tenant: cfg.Auth.Tenant,
+	CSRF:   csrf, // remove
+}, db, sessions)
+```
+
+Keeping it compiles and changes nothing; `staticcheck` reports it as SA1019.
+
+### The routes have to sit behind `CSRFProtect`
+
+The application skeleton mounts it for every route, so a project made from it
+has nothing to do. Outside it the screens draw an empty token, and nothing
+checks the writes they send either: mount the module's routes behind
+`CSRFProtect`.
+
+### The layout links
+
+The brand, sign-in, sign-out and register links are read from the routes named
+`home`, `auth.login`, `auth.logout` and `auth.register`. An application that
+registered those under other names sees the links empty on these screens, as
+it does on its own screens built with `view.New`.
+
 ## v0.5.0
 
 No symbol is removed or changed, and no route, migration, action, policy

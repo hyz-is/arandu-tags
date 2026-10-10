@@ -16,6 +16,29 @@ are gone.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-10-09
+
+### Fixed
+
+- A visitor with no session can submit the forms the screens draw. The screens
+  issued their own CSRF token from the session id, which a guest does not
+  have, so the token came out empty and every guest form was answered 419. The
+  page is now built with `view.New`, and the token is the one
+  `middleware.CSRFProtect` issued for the request and bound to the session or
+  to the guest cookie.
+- The layout links around the screens are filled. The brand, sign-in,
+  sign-out and register links come from the routes the application named
+  `home`, `auth.login`, `auth.logout` and `auth.register`, as on the
+  application's own screens, instead of being drawn as `href=""`. A route the
+  application did not register draws no link.
+- The screens carry the messages and the typed input of a rejected attempt
+  from the flash, which `view.New` reads.
+
+### Deprecated
+
+- `Config.CSRF`. It is no longer read, and `New` no longer refuses a
+  configuration without it.
+
 ## [0.5.0] - 2026-10-09
 
 ### Added
