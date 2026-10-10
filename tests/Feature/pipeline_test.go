@@ -5,19 +5,25 @@ import (
 	"database/sql"
 	"fmt"
 	"html"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/arandu-io/framework/data"
+	"github.com/arandu-io/framework/foundation"
+	"github.com/arandu-io/framework/foundation/bootstrap"
 	fhttp "github.com/arandu-io/framework/http"
 	"github.com/arandu-io/framework/http/middleware"
 	"github.com/arandu-io/framework/security"
+	"github.com/arandu-io/hesape/config"
 	"github.com/arandu-io/hesape/database"
 	"github.com/arandu-io/hesape/view"
 
@@ -94,6 +100,31 @@ var databases atomic.Int64
 func serve(t *testing.T, withNavigation bool) application {
 	t.Helper()
 
+	module, sessions := migrated(t)
+
+	router := fhttp.NewRouter().WithRenderer(layout{})
+	if withNavigation {
+		nothing := func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }
+		router.Get("/{$}", nothing).Name("home")
+		router.Get("/auth/login", nothing).Name("auth.login")
+	}
+	module.Routes(router.ForModule(module.Name()))
+
+	// The middleware the application skeleton mounts, built the way it builds
+	// it: over the session store's own reader of the session cookie.
+	csrf := security.NewCSRF([]byte(appKey), time.Hour).Secure(false)
+	return application{
+		handler:  middleware.CSRFProtect(csrf, sessions.IDFromRequest)(router),
+		sessions: sessions,
+		module:   module,
+	}
+}
+
+// migrated builds the module over a database of its own with the schema
+// applied, and the session store it reads the subject from.
+func migrated(t *testing.T) (*tags.Module, *security.SessionStore) {
+	t.Helper()
+
 	// A database of its own per application, so two served in one test do not
 	// share rows or a schema.
 	name := fmt.Sprintf("%s_%d", strings.NewReplacer("/", "_", " ", "_").Replace(t.Name()), databases.Add(1))
@@ -120,23 +151,7 @@ func serve(t *testing.T, withNavigation bool) application {
 			t.Fatalf("applying %s: %v", migration.GetName(), err)
 		}
 	}
-
-	router := fhttp.NewRouter().WithRenderer(layout{})
-	if withNavigation {
-		nothing := func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }
-		router.Get("/{$}", nothing).Name("home")
-		router.Get("/auth/login", nothing).Name("auth.login")
-	}
-	module.Routes(router.ForModule(module.Name()))
-
-	// The middleware the application skeleton mounts, built the way it builds
-	// it: over the session store's own reader of the session cookie.
-	csrf := security.NewCSRF([]byte(appKey), time.Hour).Secure(false)
-	return application{
-		handler:  middleware.CSRFProtect(csrf, sessions.IDFromRequest)(router),
-		sessions: sessions,
-		module:   module,
-	}
+	return module, sessions
 }
 
 // visit makes one request carrying the cookies given, and returns the answer.
@@ -332,5 +347,94 @@ func TestTheLayoutLinksWhereTheApplicationRegisteredItsRoutes(t *testing.T) {
 	}
 	if got, _ := href(rec.Body.String(), "data-login"); got != "" {
 		t.Errorf("with no route named auth.login Sign in links to %q, want nothing", got)
+	}
+}
+
+// layoutModule is the module an application registers to bring its views: it
+// owns no route and hands the Application the renderer every route is wired
+// with.
+type layoutModule struct{}
+
+func (layoutModule) Name() string             { return "views" }
+func (layoutModule) Routes(*fhttp.Router)     {}
+func (layoutModule) Renderer() fhttp.Renderer { return layout{} }
+
+// linkViews does once what a compiled view does from init() in an
+// application: the module refuses to boot with its views unlinked, and a
+// package that is not an application compiles none. The layout above draws
+// the page without them.
+var linkViews sync.Once
+
+// booted is the module served by the framework's own Application, configured
+// with name as APP_NAME, behind the middleware the application skeleton mounts.
+// Nothing hands the module the name: whatever the screens draw as the brand
+// came from the Application.
+func booted(t *testing.T, name string) http.Handler {
+	t.Helper()
+
+	linkViews.Do(func() {
+		for _, name := range tags.ViewNames() {
+			view.Register(name, func(io.Writer, any) error { return nil })
+		}
+	})
+	module, sessions := migrated(t)
+	app := foundation.New(bootstrap.Configuration{
+		App: config.App{
+			Name: name,
+			Env:  config.EnvProd,
+			Key:  []byte(appKey),
+		},
+		Observability: bootstrap.Observability{LogLevel: slog.LevelError},
+	})
+	csrf := security.NewCSRF([]byte(appKey), time.Hour).Secure(false)
+	app.Register(layoutModule{}, module).Use(middleware.CSRFProtect(csrf, sessions.IDFromRequest))
+	if err := app.Boot(context.Background()); err != nil {
+		t.Fatalf("booting the application: %v", err)
+	}
+	return app.Handler()
+}
+
+// brand is the text of the brand link in a drawn screen.
+func brand(t *testing.T, body string) string {
+	t.Helper()
+	m := regexp.MustCompile(`<a data-brand href="[^"]*">([^<]*)</a>`).FindStringSubmatch(body)
+	if m == nil {
+		t.Fatalf("the screen draws no brand link:\n%s", body)
+	}
+	return html.UnescapeString(m[1])
+}
+
+func TestTheScreensDrawTheApplicationNameFromTheRequest(t *testing.T) {
+	t.Parallel()
+
+	// Distinct from every title these screens carry, so a brand that fell back
+	// to the title is told apart from the configured name.
+	const name = "Acme & Co Labels"
+
+	handler := booted(t, name)
+	for _, target := range []string{
+		tags.DefaultPrefix + "?type=topic",
+		tags.DefaultPrefix + "/order?type=topic",
+	} {
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s answered %d: %s", target, rec.Code, rec.Body)
+		}
+		if got := brand(t, rec.Body.String()); got != name {
+			t.Errorf("%s draws the brand %q, want APP_NAME %q", target, got, name)
+		}
+	}
+
+	// An application that names nothing gets no name made up for it: the
+	// module has no brand of its own to draw.
+	unnamed := booted(t, "")
+	rec := httptest.NewRecorder()
+	unnamed.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, tags.DefaultPrefix+"?type=topic", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("the listing answered %d: %s", rec.Code, rec.Body)
+	}
+	if got := brand(t, rec.Body.String()); got != "" {
+		t.Errorf("with no APP_NAME the screen draws the brand %q, want none", got)
 	}
 }
