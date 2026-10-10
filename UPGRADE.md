@@ -6,6 +6,29 @@ was cloned from -- `v0.4.0` and `v0.2.0`, with the entity renamed into them,
 describing a publishing migration and a Repository removal that both happened
 before `v0.1.0` here. They are gone.
 
+## v0.5.2
+
+No symbol, route, migration, action, policy decision or tenant rule changes.
+What changes is what an application compiles against: updating to this release
+selects Framework v0.56.0, Hesape v0.54.0 and Kyse v0.34.1.
+
+Read their upgrade guides from the versions the application required before.
+The ones that reach a running deployment:
+
+- Framework v0.56.0 puts `APP_NAME` on every request, and the screens of this
+  package draw it as the brand. An application that never set `APP_NAME` draws
+  `arandu-app`, the framework's default; set it.
+- Framework v0.56.0 removes `config.Config.SessionTTL`, and `config.Load` no
+  longer reads `SESSION_TTL`. An application that built its session store from
+  it builds it with `fw.Session.Lifetime` and writes `SESSION_LIFETIME` in
+  minutes.
+- Kyse v0.34.0 draws `OneTimeCode` and `Masked` with markup that submits
+  without script, and Hesape v0.53.0 mounts it. Styles or tests that targeted
+  the old markup follow it.
+
+The views this package publishes are unchanged, so there is nothing to
+republish.
+
 ## v0.5.1
 
 No symbol is removed or changed, and no route, migration, action, policy

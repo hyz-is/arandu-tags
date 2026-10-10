@@ -16,6 +16,23 @@ are gone.
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-10-09
+
+### Changed
+
+- Requires Framework v0.56.0, Hesape v0.54.0 and Kyse v0.34.1. The manifest's
+  framework floor is `>= 0.56`.
+- `TestEveryPublishedViewCompiles` compiles the published views with aru
+  v0.72.0 in a scratch project made from skeleton v0.34.2.
+
+### Fixed
+
+- The screens draw the application's name as the brand. The module never knew
+  it and drew the brand empty; the framework now puts `APP_NAME` on every
+  request and `view.New` reads it, so nothing is passed to `New` and nothing in
+  this package assigns `AppName`. An application with no name configured draws
+  none.
+
 ## [0.5.1] - 2026-10-09
 
 ### Fixed
