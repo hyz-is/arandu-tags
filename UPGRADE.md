@@ -6,6 +6,79 @@ was cloned from -- `v0.4.0` and `v0.2.0`, with the entity renamed into them,
 describing a publishing migration and a Repository removal that both happened
 before `v0.1.0` here. They are gone.
 
+## v0.6.0
+
+No symbol is removed or changed, and no route, action, policy decision or
+tenant rule changes. Everything in this release is added, and an application
+that sets none of it behaves as it did on v0.5.2.
+
+### The routes can act as the subject the application builds
+
+`Config.Subject` is new and optional. Nil keeps reading the session store handed
+to `New`. An application whose members act inside a selected organization
+passes the function its own handlers build that subject with:
+
+```go
+tags.New(tags.Config{
+	Tenant:  cfg.Auth.Tenant,
+	Policy:  TagRules{},
+	Subject: organizations.SubjectOf, // func(*http.Request) (security.Subject, error)
+}, db, sessions)
+```
+
+The routes then read and write under that subject's tenant. Its error is the
+answer to the request: `security.ErrForbidden` is a 403 and anything else is
+returned to the framework's error page, where the session store's own failure
+used to be read as a visitor. With `Config.Subject` set, `New` accepts a nil
+session store.
+
+### The picker
+
+Republish it to get the two changes below. A picker published before keeps
+compiling against this release and draws what it drew.
+
+```sh
+aru vendor:publish --tag=view --apply
+aru view:build
+```
+
+- `PickerData.IDPrefix` is written in front of every checkbox id, through
+  `PickerData.CheckboxID`. A page that draws two pickers gives each its own
+  prefix; empty draws the ids of v0.5.2.
+- The empty states are told apart. A taxonomy with no label draws the new line
+  `screen.picker_nothing_to_choose`; `screen.picker_empty` is drawn when labels
+  exist and the entity carries none. An application that overrode
+  `screen.picker_empty` in its catalogue keeps its sentence, now drawn where
+  its wording is right, and writes the new key if it overrides the others.
+
+If you edited the picker, the lines to change are:
+
+| was | is |
+| --- | --- |
+| `ID:      "tag-" + row.ID,` | `ID:      .CheckboxID(row),` |
+| `@else` with `screen.picker_empty` inside the form | `@if(.NothingToChoose())` with `screen.picker_nothing_to_choose` |
+| nothing after the carried badges | `@if(.NoneCarried())` with `screen.picker_empty` |
+
+### Filtering a listing by label
+
+`OwnersWithAnyTag` is unchanged, and its answer is every identifier carrying the
+labels. An application that sends that answer back as `id IN (...)` moves to
+`OwnersWithAnyTagCondition`, which returns a condition for its own query:
+
+```go
+// was
+ids, err := svc.OwnersWithAnyTag(ctx, actor, CaseType, tagIDs)
+page, err := Cases(db).WhereIn("id", toAny(ids)).Get(ctx, g)
+
+// is
+carrying, err := svc.OwnersWithAnyTagCondition(ctx, actor, CaseType, tagIDs, "cases.id")
+page, err := Cases(db).WhereExists(carrying).Get(ctx, g)
+```
+
+The statement then binds the labels and never the entities, so it does not grow
+with the number of tagged rows and does not reach PostgreSQL's limit of 65,535
+parameters.
+
 ## v0.5.2
 
 No symbol, route, migration, action, policy decision or tenant rule changes.

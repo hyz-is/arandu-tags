@@ -16,6 +16,8 @@ are gone.
 
 ## [Unreleased]
 
+## [0.6.0] - Unreleased
+
 ### Added
 
 - `Config.Subject`, a `func(*http.Request) (security.Subject, error)` the
