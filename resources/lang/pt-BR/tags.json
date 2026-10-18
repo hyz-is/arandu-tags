@@ -43,7 +43,8 @@
         "order_lead": "Mova uma etiqueta com as setas, ou grave a ordem inteira de uma vez.",
         "order_empty": "Não há nada para ordenar.",
         "picker_title": "Etiquetas",
-        "picker_empty": "Isto ainda não carrega nenhuma etiqueta."
+        "picker_empty": "Isto ainda não carrega nenhuma etiqueta.",
+        "picker_nothing_to_choose": "Ainda não há etiquetas para escolher."
     },
     "message": {
         "created": "A etiqueta foi criada.",

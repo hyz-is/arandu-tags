@@ -55,8 +55,12 @@ type PickerData = tags.PickerData
 					Variant: "outline",
 				}) !!}
 			</div>
-		@else
-			<p class="text-muted-foreground text-sm">{{ .Labels.T("screen.picker_empty") }}</p>
+		@endif
+		{{-- Two empty states, and they are told apart: a taxonomy that holds
+		     no label yet has nothing to choose from, and that is not the same
+		     as an entity that carries none of the labels there are. --}}
+		@if(.NothingToChoose())
+			<p class="text-muted-foreground text-sm">{{ .Labels.T("screen.picker_nothing_to_choose") }}</p>
 		@endif
 	</form>
 
@@ -66,5 +70,8 @@ type PickerData = tags.PickerData
 				<li>{!! components.Badge(components.BadgeProps{Label: row.Label, Variant: "secondary"}) !!}</li>
 			@endforeach
 		</ul>
+	@endif
+	@if(.NoneCarried())
+		<p class="text-muted-foreground text-sm">{{ .Labels.T("screen.picker_empty") }}</p>
 	@endif
 </section>

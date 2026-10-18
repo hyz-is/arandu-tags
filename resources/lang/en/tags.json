@@ -43,7 +43,8 @@
         "order_lead": "Move a label with the arrows, or drop the whole order in one go.",
         "order_empty": "There is nothing to order.",
         "picker_title": "Labels",
-        "picker_empty": "This carries no label yet."
+        "picker_empty": "This carries no label yet.",
+        "picker_nothing_to_choose": "There is no label to choose from yet."
     },
     "message": {
         "created": "The label was created.",

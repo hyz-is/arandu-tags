@@ -250,6 +250,30 @@ type PickerData struct {
 // CheckboxID is the id of the checkbox a row is drawn with.
 func (d PickerData) CheckboxID(row Row) string { return d.IDPrefix + "tag-" + row.ID }
 
+// NothingToChoose reports whether there is no label to offer at all: the
+// taxonomy holds none yet. It is a different sentence from NoneCarried, and the
+// difference is the one a person needs -- "create a label first" and "this
+// carries none of the labels you have" are not the same thing to be told.
+func (d PickerData) NothingToChoose() bool { return len(d.Available) == 0 && len(d.Carried) == 0 }
+
+// NoneCarried reports whether labels exist to be chosen and the entity carries
+// none of them.
+//
+// It reads both halves an application may fill: Carried, and the Held mark
+// PickerRows puts on Available. A picker filled with PickerRows alone and no
+// Carried still knows what is held.
+func (d PickerData) NoneCarried() bool {
+	if len(d.Available) == 0 || len(d.Carried) > 0 {
+		return false
+	}
+	for _, row := range d.Available {
+		if row.Held {
+			return false
+		}
+	}
+	return true
+}
+
 // row snapshots one label for a screen.
 func (m *Module) row(labels Labels, record *Tag) Row {
 	if record == nil {

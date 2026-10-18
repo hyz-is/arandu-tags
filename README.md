@@ -292,6 +292,12 @@ the labels of a case and of one of its parties -- gives each its own
 `IDPrefix`, such as `"party-"`, so their checkboxes do not share an id; empty
 draws the ids the picker has always drawn.
 
+The picker tells its two empty states apart. A taxonomy that holds no label
+yet draws `screen.picker_nothing_to_choose` ("Ainda não há etiquetas para
+escolher."); labels to choose from with none of them carried draws
+`screen.picker_empty` ("Isto ainda não carrega nenhuma etiqueta."), reading
+both `Carried` and the `Held` mark `PickerRows` puts on `Available`.
+
 The reordering screen moves labels with buttons and not by dragging. A drag
 needs a script served beside the page and a keyboard path written a second time;
 four buttons are the keyboard path, and nothing has to be downloaded for them to

@@ -30,6 +30,17 @@ are gone.
   `PickerData.CheckboxID`, the id of one row's checkbox. Two pickers on one
   page no longer draw two checkboxes with one id. Empty draws the ids the
   picker drew before.
+- `PickerData.NothingToChoose` and `PickerData.NoneCarried`, and the line
+  `screen.picker_nothing_to_choose` in `en` and `pt-BR`.
+
+### Fixed
+
+- The picker no longer says the entity carries no label when the taxonomy has
+  no label at all. "Isto ainda não carrega nenhuma etiqueta." was drawn exactly
+  when there was nothing to choose from; that state now reads "Ainda não há
+  etiquetas para escolher.", and `screen.picker_empty` is drawn when labels
+  exist and the entity carries none of them. A project that published the
+  picker republishes it.
 
 ## [0.5.2] - 2026-10-09
 
