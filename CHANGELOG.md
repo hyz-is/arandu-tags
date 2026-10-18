@@ -26,6 +26,10 @@ are gone.
   An empty subject is a guest of `Config.Tenant`, `security.ErrForbidden`
   answers 403 and any other error is returned to the framework. `New` accepts
   a nil session store when `Config.Subject` is set.
+- `PickerData.IDPrefix`, written in front of every id the picker draws, and
+  `PickerData.CheckboxID`, the id of one row's checkbox. Two pickers on one
+  page no longer draw two checkboxes with one id. Empty draws the ids the
+  picker drew before.
 
 ## [0.5.2] - 2026-10-09
 

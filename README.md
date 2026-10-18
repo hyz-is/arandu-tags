@@ -287,7 +287,10 @@ The picker is the one no route of this module answers, for the same reason
 nothing here attaches over HTTP. You draw it inside a page of your own, from a
 handler that has already asked whether this person may tag this article, and
 fill `tags.PickerData` — `Action` is your route. `(*Module).PickerRows` gives you
-the rows with the ones already carried marked.
+the rows with the ones already carried marked. A page that draws two pickers --
+the labels of a case and of one of its parties -- gives each its own
+`IDPrefix`, such as `"party-"`, so their checkboxes do not share an id; empty
+draws the ids the picker has always drawn.
 
 The reordering screen moves labels with buttons and not by dragging. A drag
 needs a script served beside the page and a keyboard path written a second time;

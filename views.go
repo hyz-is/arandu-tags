@@ -238,7 +238,17 @@ type PickerData struct {
 	// be given.
 	Carried   []Row
 	Available []Row
+	// IDPrefix is written in front of every element id the fragment draws, so
+	// two pickers on one page -- the labels of a case and of one of its
+	// parties -- do not draw two checkboxes with one id, where a click on the
+	// label of the second ticks the box of the first. Empty draws the ids this
+	// fragment has always drawn. It is the application's own constant, such as
+	// "party-", and never something the request carries.
+	IDPrefix string
 }
+
+// CheckboxID is the id of the checkbox a row is drawn with.
+func (d PickerData) CheckboxID(row Row) string { return d.IDPrefix + "tag-" + row.ID }
 
 // row snapshots one label for a screen.
 func (m *Module) row(labels Labels, record *Tag) Row {

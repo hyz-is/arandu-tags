@@ -39,7 +39,7 @@ type PickerData = tags.PickerData
 					<li>
 						{!! components.Checkbox(components.CheckboxProps{
 							Name:    "id",
-							ID:      "tag-" + row.ID,
+							ID:      .CheckboxID(row),
 							Value:   row.ID,
 							Label:   row.Label,
 							Checked: row.Held,
