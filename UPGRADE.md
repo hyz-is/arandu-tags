@@ -8,10 +8,21 @@ before `v0.1.0` here. They are gone.
 
 ## v0.6.0
 
-No symbol is removed or changed, and no route, action, policy decision or
+No symbol is removed or renamed, and no route, action, policy decision or
 tenant rule changes. Everything in this release is added, and an application
 that sets none of it behaves as it did on v0.5.2 -- once the migration below has
-run.
+run. The one change `apidiff` reports is that three types stop being
+comparable, which the next section names.
+
+### `Config`, `Module` and `TagService` are no longer comparable
+
+`apidiff` reports the one incompatibility of this release: `Config` gained a
+function field (`Subject`) and a slice field (`Colours`), so `==` no longer
+compiles on a `Config`, nor on a `Module` or `TagService` value, which hold one
+or a slice of their own. Nothing in this package compares them, and the
+applications that install it hold `*Module` and `*TagService`, whose pointers
+still compare. Code that compared two `Config` values with `==` compares the
+fields it means instead, or uses `reflect.DeepEqual`.
 
 ### Run the migration before deploying
 

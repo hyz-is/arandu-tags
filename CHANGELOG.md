@@ -64,6 +64,9 @@ are gone.
 
 - The documentation of `OwnersWithAnyTag` states that its answer is unbounded
   and is not to be sent back as `id IN (...)`; the method itself is unchanged.
+- `Config`, `Module` and `TagService` are no longer comparable with `==`:
+  `Config` holds a function (`Subject`) and a slice (`Colours`). Pointers to
+  `Module` and `TagService` compare as before.
 
 ### Fixed
 
