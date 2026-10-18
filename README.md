@@ -247,6 +247,36 @@ fires when somebody else's row goes away.
 with your rows: this package has never seen your table and is not going to guess
 at its schema.
 
+### Filter your own listing by label
+
+`OwnersWithAnyTag` answers with every identifier that carries the labels, and
+nothing bounds how many there are. Handing them back to your own query as
+`id IN (...)` sends one bound parameter per tagged entity: it slows with every
+entity tagged, and PostgreSQL refuses it outright past 65,535 parameters. Use
+it for answers you know are small.
+
+To filter a listing of your table, ask for a condition and put it in your own
+query instead. It compiles into a correlated `exists` subquery over the
+associations, so the statement carries the labels -- at most `MaxIDsPerQuery`
+of them -- and never the entities:
+
+```go
+	carrying, err := module.Service().OwnersWithAnyTagCondition(ctx, actor, CaseType, tagIDs, "cases.id")
+	if err != nil {
+		return err
+	}
+	page, err := Cases(db).WhereExists(carrying).OrderBy("created_at").Limit(50).Get(ctx, g)
+```
+
+`WhereNotExists(carrying)` keeps the rows that carry none of them. The column
+is yours, qualified by your table, and is compared as text with the identifier
+you tagged under; it is written into the statement as an identifier, so it is a
+constant in your code and never something the request carries. The tenant in
+the subquery is the one on the Grant the call authorized `tag.list` for, the
+labels are read under that Grant first, and Hesape puts your query's own Grant
+on the subquery as well when it runs. Build the condition per request; your
+query has to run on the database this package was given.
+
 ## Find, order and sweep
 
 `FindByName` takes a name or the slug it reduces to, because both are spellings

@@ -165,6 +165,10 @@ func TestTheServiceRefusesBeforeReachingTheModel(t *testing.T) {
 			_, err := service.OwnersWithAnyTag(ctx, administrator(), articleType, ids)
 			return err
 		},
+		"OwnersWithAnyTagCondition": func() error {
+			_, err := service.OwnersWithAnyTagCondition(ctx, administrator(), articleType, ids, "articles.id")
+			return err
+		},
 		"OwnersWithAllTags": func() error {
 			_, err := service.OwnersWithAllTags(ctx, administrator(), articleType, ids)
 			return err
@@ -268,7 +272,8 @@ func TestEveryExportedServiceMethodIsRefused(t *testing.T) {
 		"DetachTags", "Find", "FindByName", "FindInAnyTaxonomy",
 		"FindManyByName", "FindOrCreate", "HasTag", "List", "Move", "MoveDown",
 		"MoveToEnd", "MoveToStart", "MoveUp", "OwnersWithAllTags",
-		"OwnersWithAnyTag", "OwnersWithAnyTagOfTaxonomy", "OwnersWithoutAnyTag",
+		"OwnersWithAnyTag", "OwnersWithAnyTagCondition", "OwnersWithAnyTagOfTaxonomy",
+		"OwnersWithoutAnyTag",
 		"Rename", "Reorder", "Search", "SwapOrder", "SyncTags",
 		"SyncTagsOfTaxonomy", "TagsOf", "TagsOfTaxonomy", "Taxonomies",
 		"UnusedTags",

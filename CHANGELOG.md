@@ -32,6 +32,18 @@ are gone.
   picker drew before.
 - `PickerData.NothingToChoose` and `PickerData.NoneCarried`, and the line
   `screen.picker_nothing_to_choose` in `en` and `pt-BR`.
+- `(*TagService).OwnersWithAnyTagCondition` and the type `OwnerCondition`:
+  a correlated `exists` subquery over `taggables`, scoped by the tenant of the
+  Grant the call authorized `TagList` for, that an application adds to a query
+  of its own table with `WhereExists` or `WhereNotExists`. The statement binds
+  the labels, at most `MaxIDsPerQuery`, and never the entities, so filtering a
+  listing by label no longer sends `id IN (...)` with one parameter per tagged
+  entity. `MaxOwnerColumnLen` bounds the column reference it takes.
+
+### Changed
+
+- The documentation of `OwnersWithAnyTag` states that its answer is unbounded
+  and is not to be sent back as `id IN (...)`; the method itself is unchanged.
 
 ### Fixed
 

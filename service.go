@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/arandu-io/framework/data"
 	"github.com/arandu-io/framework/security"
 	"github.com/arandu-io/framework/validation"
+	"github.com/arandu-io/hesape/database/query"
 
 	"github.com/hyz-is/arandu-tags/internal/sequence"
 )
@@ -536,6 +538,15 @@ func (s *TagService) TagsOf(ctx context.Context, actor security.Subject, ref Own
 // belongs to the application, this package has never seen it, and a module
 // that returned rows out of it would be a module that had been told how to
 // read somebody else's schema.
+//
+// The answer is every such identifier, unbounded: it is as long as the number
+// of entities carrying the labels, which is a number nothing here limits. It is
+// for a question whose answer is known to be small. A caller that filters a
+// listing of its own table by label does not hand the answer back as
+// `id IN (...)` -- one bound parameter per entity, which slows with every
+// entity tagged and is refused outright past the engine's parameter limit,
+// 65,535 on PostgreSQL. It asks OwnersWithAnyTagCondition for a condition and
+// puts it in its own query instead.
 func (s *TagService) OwnersWithAnyTag(ctx context.Context, actor security.Subject, kind OwnerType, tagIDs []string) ([]string, error) {
 	g, err := security.Authorize(ctx, s.policy, actor, TagList, Tag{})
 	if err != nil {
@@ -553,6 +564,120 @@ func (s *TagService) OwnersWithAnyTag(ctx context.Context, actor security.Subjec
 		return nil, err
 	}
 	return distinct(texts(found)), nil
+}
+
+// MaxOwnerColumnLen is the longest column reference OwnersWithAnyTagCondition
+// accepts.
+const MaxOwnerColumnLen = 128
+
+// OwnerCondition is a filter over the associations that an application adds to
+// a query of its own table, as the subquery of an exists clause.
+//
+// It is a func(*query.Builder), which is the shape every Hesape query takes an
+// exists subquery in, so it is handed over as it is:
+//
+//	carrying, err := tags.Service().OwnersWithAnyTagCondition(ctx, actor, CaseType, tagIDs, "cases.id")
+//	...
+//	page, err := Cases(db).WhereExists(carrying).OrderBy("created_at").Limit(50).Get(ctx, g)
+//
+// and WhereNotExists with the same value keeps the rows that carry none of the
+// labels. It is bound to the Grant it was built under, and is built again for
+// another request rather than kept.
+type OwnerCondition func(*query.Builder)
+
+// OwnersWithAnyTagCondition returns a condition that keeps the rows of the
+// caller's own query whose identifier, in ownerColumn, names an entity of this
+// kind carrying at least one of these labels.
+//
+// It is the bounded form of OwnersWithAnyTag. That one reads the identifiers
+// back, and a caller that filters its listing by them sends one bound
+// parameter per tagged entity; this one is compiled into the caller's
+// statement as a correlated subquery over the associations,
+//
+//	exists (select 1 from taggables
+//	        where taggables.tenant_id = ? and taggables.owner_type = ?
+//	          and taggables.tag_id in (?, ...) and taggables.owner_id = <ownerColumn>)
+//
+// so the statement carries the labels, at most MaxIDsPerQuery of them, and
+// never the entities. The engine answers it from the index over tenant, kind,
+// label and owner.
+//
+// The tenant is written into the subquery from data.Tenant(g), the Grant this
+// call authorized TagList for, and the labels are read under that Grant first:
+// the condition names only labels this tenant holds, and one naming none of
+// them keeps no row. Hesape puts the tenant of the statement's own Grant on an
+// exists subquery as well when it runs, so a condition used under another
+// tenant's Grant matches nothing rather than crossing over.
+//
+// ownerColumn is the column of the caller's table that holds the identifier the
+// entity was tagged under, qualified by the table when the query joins:
+// "cases.id". It is a name, compared as text with the stored identifier, and it
+// is held to a letter or underscore followed by letters, digits and
+// underscores, with at most one dot: it is written into the statement as an
+// identifier, so it is the application's own constant and never something the
+// request carries. The caller's query has to run on the database this package
+// was given.
+func (s *TagService) OwnersWithAnyTagCondition(ctx context.Context, actor security.Subject, kind OwnerType, tagIDs []string, ownerColumn string) (OwnerCondition, error) {
+	g, err := security.Authorize(ctx, s.policy, actor, TagList, Tag{})
+	if err != nil {
+		return nil, err
+	}
+	if err := checkOwnerQuery(kind, tagIDs); err != nil {
+		return nil, err
+	}
+	if !validColumnReference(ownerColumn) {
+		return nil, fmt.Errorf("tags: %q cannot be a column reference: a letter or _ followed by letters, digits and _, with at most one dot, up to %d characters", ownerColumn, MaxOwnerColumnLen)
+	}
+
+	held, err := Tags(s.db).
+		WhereIn("id", anys(distinct(tagIDs))).
+		Limit(MaxIDsPerQuery).
+		Pluck(ctx, g, "id")
+	if err != nil {
+		return nil, err
+	}
+	labels := anys(distinct(texts(held)))
+	tenant := data.Tenant(g)
+	owner := kind.String()
+
+	return func(q *query.Builder) {
+		q.From(TaggableTable).
+			SelectRaw("1").
+			Where(TaggableTable+".tenant_id", "=", tenant).
+			Where(TaggableTable+".owner_type", "=", owner).
+			WhereIn(TaggableTable+".tag_id", labels).
+			WhereColumn(TaggableTable+".owner_id", "=", ownerColumn)
+	}, nil
+}
+
+// validColumnReference reports whether a string is a plain column name, or a
+// table and a column joined by one dot.
+func validColumnReference(reference string) bool {
+	if reference == "" || len(reference) > MaxOwnerColumnLen {
+		return false
+	}
+	table, column, qualified := strings.Cut(reference, ".")
+	if !qualified {
+		return validIdentifier(reference)
+	}
+	return validIdentifier(table) && validIdentifier(column)
+}
+
+// validIdentifier reports whether a string is a letter or an underscore
+// followed by letters, digits and underscores.
+func validIdentifier(name string) bool {
+	if name == "" {
+		return false
+	}
+	for i := 0; i < len(name); i++ {
+		c := name[i]
+		letter := c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c == '_'
+		digit := c >= '0' && c <= '9'
+		if !letter && (i == 0 || !digit) {
+			return false
+		}
+	}
+	return true
 }
 
 // OwnersWithAllTags returns the entities of one kind that carry every one of
