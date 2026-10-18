@@ -99,6 +99,34 @@ type Config struct {
 	// rule below it holds across customers without it, as soon as two of them
 	// have a record with the same identifier.
 	Policy security.Policy[Tag]
+
+	// Subject is who is acting on a request to this module's own routes.
+	//
+	// Nil reads the subject from the session store handed to New, which is the
+	// subject of the realm the person signed in to -- the behaviour this package
+	// has always had. An application whose subject is more than that session --
+	// a member acting inside the organization they selected, with the actions
+	// that membership carries and the organization as the tenant -- passes the
+	// function its own handlers already build that subject with, so the screens
+	// and resources here are decided about by the same subject, under the same
+	// tenant, as the rest of the application. When it is set, New does not need
+	// a session store, and the one it is handed is not read.
+	//
+	// The tenant of the subject it answers is the tenant every statement is
+	// scoped by, so it is the application's to establish from what it already
+	// authorized -- the session, the membership -- and never a value the request
+	// names. Its answer is read three ways:
+	//
+	//   - a subject with an identifier is the one acting;
+	//   - a declared guest (security.Guest) is a visitor of the tenant it names,
+	//     and the empty subject is a guest of Tenant, as a request with no
+	//     session is without this hook;
+	//   - an error is the answer to the request. security.ErrForbidden is a
+	//     403 like any refusal, and anything else is returned to the framework,
+	//     which draws its error page: a subject that could not be built is not
+	//     a visitor, and answering it as one would draw an empty screen where
+	//     the failure should be.
+	Subject func(*http.Request) (security.Subject, error)
 }
 
 // Validate reports what the configuration cannot be used with.

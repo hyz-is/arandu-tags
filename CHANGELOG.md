@@ -16,6 +16,17 @@ are gone.
 
 ## [Unreleased]
 
+### Added
+
+- `Config.Subject`, a `func(*http.Request) (security.Subject, error)` the
+  module's own routes ask who is acting when it is set, instead of the session
+  store. An application whose members act inside a selected organization
+  passes the builder its own handlers use, and the screens and resources are
+  decided about under the organization's tenant. Nil keeps reading the session.
+  An empty subject is a guest of `Config.Tenant`, `security.ErrForbidden`
+  answers 403 and any other error is returned to the framework. `New` accepts
+  a nil session store when `Config.Subject` is set.
+
 ## [0.5.2] - 2026-10-09
 
 ### Changed

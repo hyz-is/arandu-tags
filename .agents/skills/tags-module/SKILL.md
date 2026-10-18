@@ -68,7 +68,11 @@ name, which is what `aru route:list` groups by.
 
 ```go
 func (m *Module) destroy(ctx *fhttp.Context) error {
-	if err := m.svc.Delete(ctx.Ctx(), m.subject(ctx.Request), ctx.Param("id")); err != nil {
+	actor, err := m.subject(ctx.Request)
+	if err != nil {
+		return m.answer(ctx, err)
+	}
+	if err := m.svc.Delete(ctx.Ctx(), actor, ctx.Param("id")); err != nil {
 		return m.answer(ctx, err)
 	}
 	return ctx.Status(stdhttp.StatusNoContent)
@@ -98,9 +102,18 @@ passes.
 
 ## Where the subject comes from
 
-`m.subject(r)` loads the session and returns `security.Guest(m.cfg.Tenant)` when
+`m.subject(r)` calls `Config.Subject` when the application set it, and
+otherwise loads the session and returns `security.Guest(m.cfg.Tenant)` when
 there is none. Nothing else reads who is acting, and no handler takes a user id
-from the request.
+from the request. An error from `Config.Subject` is handed to `m.answer`, so a
+handler reads the subject first and answers with the error when there is one:
+
+```go
+	actor, err := m.subject(ctx.Request)
+	if err != nil {
+		return m.answer(ctx, err)
+	}
+```
 
 The guest's tenant is the one place in this package where a tenant does not come
 from a Grant, and it is because there is no Grant yet. It comes from

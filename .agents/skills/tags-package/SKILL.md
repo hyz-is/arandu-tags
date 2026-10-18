@@ -78,6 +78,9 @@ route that authorized correctly. The migration has not run.
 | `Tenant` | yes | the customer a visitor with no session is read as. From the application's configuration, never from the request |
 | `Prefix` | no | where the routes are mounted. Defaults to `/tags` |
 | `PageSize` | no | how many records one page answers with. Defaults to 25, refused above 200 |
+| `Policy` | no | the rules. Nil is `TagPolicy`, which denies everything |
+| `Translator` | no | the application's catalogue, asked before the one this package ships |
+| `Subject` | no | who acts on a request to the routes: `func(*http.Request) (security.Subject, error)`. Nil reads the session store. Pass the application's own subject builder when members act inside a selected organization |
 
 `Tenant` is the one place a tenant does not come from a `Grant`, and it is
 because a visitor with no session has no `Grant` yet. Everywhere else the tenant

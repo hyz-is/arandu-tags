@@ -124,6 +124,12 @@ func serve(t *testing.T, withNavigation bool) application {
 // applied, and the session store it reads the subject from.
 func migrated(t *testing.T) (*tags.Module, *security.SessionStore) {
 	t.Helper()
+	return migratedWith(t, tags.Config{Tenant: "acme", Policy: visitorRules{}})
+}
+
+// migratedWith is migrated with the configuration given.
+func migratedWith(t *testing.T, cfg tags.Config) (*tags.Module, *security.SessionStore) {
+	t.Helper()
 
 	// A database of its own per application, so two served in one test do not
 	// share rows or a schema.
@@ -136,7 +142,7 @@ func migrated(t *testing.T) (*tags.Module, *security.SessionStore) {
 	raw.SetMaxOpenConns(1)
 
 	sessions := security.NewSessionStore([]byte(appKey), time.Hour, false, security.NewMemoryBackend())
-	module, err := tags.New(tags.Config{Tenant: "acme", Policy: visitorRules{}}, data.Wrap(raw, data.DialectSQLite), sessions)
+	module, err := tags.New(cfg, data.Wrap(raw, data.DialectSQLite), sessions)
 	if err != nil {
 		t.Fatalf("building the module: %v", err)
 	}

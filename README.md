@@ -111,10 +111,35 @@ boot rather than answering the first request that reaches one of them with a
 | `PageSize` | no | how many records one page answers with. Defaults to 25, refused above 200. |
 | `Policy` | no | the rules. Nil is `TagPolicy`, which denies everything. |
 | `Translator` | no | your catalogue, asked before the one this package ships. |
+| `Subject` | no | who acts on a request to these routes. Nil reads the session store handed to `New`. |
 
 `New` returns an error rather than starting half-wired, so a setting that
 cannot work fails where it is written instead of on the first request that
 needed it.
+
+### Who the routes act as
+
+By default the routes read the subject from the session store handed to `New`,
+which is the subject of the realm the person signed in to. An application with
+organizations has its members act inside the organization they selected, with
+the organization as the tenant, and that subject is not in the realm session.
+Pass the function your own handlers build it with:
+
+```go
+	tagsModule, err := tags.New(tags.Config{
+		Tenant:  cfg.Auth.Tenant,
+		Policy:  TagRules{},
+		Subject: organizations.SubjectOf, // func(*http.Request) (security.Subject, error)
+	}, db, sessions)
+```
+
+The tenant of the subject it answers is the tenant every statement is scoped
+by, so it comes from what the application already authorized -- the session
+and the membership -- and never from the path, the query, the body or a header.
+An empty subject is a guest of `Tenant`, a `security.Guest` keeps the tenant it
+names, `security.ErrForbidden` answers 403, and any other error is returned to
+the framework, which draws its error page. With `Subject` set, the session store
+is not read and `New` accepts a nil one.
 
 ## Routes
 

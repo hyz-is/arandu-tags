@@ -107,8 +107,10 @@ func New(cfg Config, db *data.DB, sessions *security.SessionStore) (*Module, err
 	if db == nil {
 		return nil, errors.New("tags: New needs a database handle: this package owns tables, and there is no in-memory mode that would let it start without one")
 	}
-	if sessions == nil {
-		return nil, errors.New("tags: New needs a session store: it is where the subject comes from, and a request with no subject cannot be authorized")
+	// The session store is where the subject comes from, unless the
+	// application said where it comes from instead.
+	if sessions == nil && cfg.Subject == nil {
+		return nil, errors.New("tags: New needs a session store, or Config.Subject: it is where the subject comes from, and a request with no subject cannot be authorized")
 	}
 	cfg = cfg.withDefaults()
 	service := NewTagService(db)
@@ -245,7 +247,10 @@ func (m *Module) Boot(context.Context) error {
 
 // index answers a page of one taxonomy, as the listing or as a collection.
 func (m *Module) index(ctx *fhttp.Context) error {
-	actor := m.subject(ctx.Request)
+	actor, err := m.subject(ctx.Request)
+	if err != nil {
+		return m.answer(ctx, err)
+	}
 	taxonomy := ctx.Query("type")
 	search := strings.TrimSpace(ctx.Query("q"))
 	query := data.Query{
@@ -255,7 +260,6 @@ func (m *Module) index(ctx *fhttp.Context) error {
 	}
 
 	var records []*Tag
-	var err error
 	if search != "" {
 		records, err = m.svc.Search(ctx.Ctx(), actor, taxonomy, search, query)
 	} else {
@@ -290,7 +294,7 @@ func (m *Module) index(ctx *fhttp.Context) error {
 		next = m.listingOf(ctx, taxonomy) + "&cursor=" + url.QueryEscape(cursor)
 	}
 	return ctx.View(ViewIndex, IndexPageData{
-		Page:          m.page(ctx, labels.T("screen.index_title")),
+		Page:          m.page(ctx, actor, labels.T("screen.index_title")),
 		Prefix:        m.cfg.Prefix,
 		Labels:        labels,
 		Taxonomy:      taxonomy,
@@ -308,7 +312,11 @@ func (m *Module) index(ctx *fhttp.Context) error {
 
 // show answers one record, as the form that edits it or as the resource.
 func (m *Module) show(ctx *fhttp.Context) error {
-	record, err := m.svc.Find(ctx.Ctx(), m.subject(ctx.Request), ctx.Param("id"))
+	actor, err := m.subject(ctx.Request)
+	if err != nil {
+		return m.answer(ctx, err)
+	}
+	record, err := m.svc.Find(ctx.Ctx(), actor, ctx.Param("id"))
 	if err != nil {
 		return m.answer(ctx, err)
 	}
@@ -319,7 +327,7 @@ func (m *Module) show(ctx *fhttp.Context) error {
 	labels := m.Labels(m.locale(ctx.Request))
 	row := m.linked(ctx, []Row{m.row(labels, record)})[0]
 	return ctx.View(ViewEdit, EditPageData{
-		Page:      m.page(ctx, labels.T("screen.edit_title")),
+		Page:      m.page(ctx, actor, labels.T("screen.edit_title")),
 		Prefix:    m.cfg.Prefix,
 		Labels:    labels,
 		Row:       row,
@@ -333,7 +341,11 @@ func (m *Module) show(ctx *fhttp.Context) error {
 func (m *Module) store(ctx *fhttp.Context) error {
 	in := CreateRequest{Name: ctx.Input("name"), Taxonomy: ctx.Input("type")}
 
-	record, err := m.svc.Create(ctx.Ctx(), m.subject(ctx.Request), in)
+	actor, err := m.subject(ctx.Request)
+	if err != nil {
+		return m.answer(ctx, err)
+	}
+	record, err := m.svc.Create(ctx.Ctx(), actor, in)
 	if err != nil {
 		return m.answer(ctx, err)
 	}
@@ -347,7 +359,11 @@ func (m *Module) store(ctx *fhttp.Context) error {
 func (m *Module) update(ctx *fhttp.Context) error {
 	in := RenameRequest{Name: ctx.Input("name")}
 
-	record, err := m.svc.Rename(ctx.Ctx(), m.subject(ctx.Request), ctx.Param("id"), in)
+	actor, err := m.subject(ctx.Request)
+	if err != nil {
+		return m.answer(ctx, err)
+	}
+	record, err := m.svc.Rename(ctx.Ctx(), actor, ctx.Param("id"), in)
 	if err != nil {
 		return m.answer(ctx, err)
 	}
@@ -359,7 +375,10 @@ func (m *Module) update(ctx *fhttp.Context) error {
 
 // destroy removes one record and every association to it.
 func (m *Module) destroy(ctx *fhttp.Context) error {
-	actor := m.subject(ctx.Request)
+	actor, err := m.subject(ctx.Request)
+	if err != nil {
+		return m.answer(ctx, err)
+	}
 
 	// Read before the delete, because the answer is a listing of the taxonomy
 	// the record was in and the record is what says which one that is. Asking
@@ -383,7 +402,10 @@ func (m *Module) destroy(ctx *fhttp.Context) error {
 // about all of it: a screen showing a window onto the order cannot say what
 // moving the last row of the window does to the row after it.
 func (m *Module) order(ctx *fhttp.Context) error {
-	actor := m.subject(ctx.Request)
+	actor, err := m.subject(ctx.Request)
+	if err != nil {
+		return m.answer(ctx, err)
+	}
 	taxonomy := ctx.Query("type")
 
 	records, err := m.svc.List(ctx.Ctx(), actor, taxonomy, data.Query{Limit: MaxIDsPerQuery})
@@ -396,7 +418,7 @@ func (m *Module) order(ctx *fhttp.Context) error {
 
 	labels := m.Labels(m.locale(ctx.Request))
 	return ctx.View(ViewOrder, OrderPageData{
-		Page:       m.page(ctx, labels.T("screen.order_title")),
+		Page:       m.page(ctx, actor, labels.T("screen.order_title")),
 		Prefix:     m.cfg.Prefix,
 		Labels:     labels,
 		Taxonomy:   taxonomy,
@@ -415,7 +437,11 @@ func (m *Module) reorder(ctx *fhttp.Context) error {
 	}
 	taxonomy := ctx.Input("type")
 
-	records, err := m.svc.Reorder(ctx.Ctx(), m.subject(ctx.Request), taxonomy, ctx.Request.PostForm["id"])
+	actor, err := m.subject(ctx.Request)
+	if err != nil {
+		return m.answer(ctx, err)
+	}
+	records, err := m.svc.Reorder(ctx.Ctx(), actor, taxonomy, ctx.Request.PostForm["id"])
 	if err != nil {
 		return m.answer(ctx, err)
 	}
@@ -432,11 +458,13 @@ func (m *Module) reorder(ctx *fhttp.Context) error {
 // operation are four things to keep in step in the markup, the router and the
 // guides.
 func (m *Module) move(ctx *fhttp.Context) error {
-	actor := m.subject(ctx.Request)
+	actor, err := m.subject(ctx.Request)
+	if err != nil {
+		return m.answer(ctx, err)
+	}
 	id := ctx.Param("id")
 
 	var record *Tag
-	var err error
 	switch direction := ctx.Input("direction"); direction {
 	case "up":
 		record, err = m.svc.MoveUp(ctx.Ctx(), actor, id)
@@ -512,16 +540,17 @@ func (m *Module) locale(r *stdhttp.Request) string { return translation.Locale(r
 // view.New documents, so a route the application never registered draws no
 // link.
 //
-// Authenticated is the one field set after New, from the subject this module
-// reads off the session: the routes here load nobody onto the request, so the
-// subject New would ask about is never there.
-func (m *Module) page(ctx *fhttp.Context, title string) view.Page {
+// Authenticated is the one field set after New, from the subject the handler
+// read: the routes here load nobody onto the request, so the subject New would
+// ask about is never there.
+func (m *Module) page(ctx *fhttp.Context, actor security.Subject, title string) view.Page {
 	page := view.New(ctx, title)
-	page.Authenticated = m.subject(ctx.Request).ID != ""
+	page.Authenticated = actor.ID != ""
 	return page
 }
 
-// subject reads who is acting from the session, and from nowhere else.
+// subject reads who is acting: from the function the application configured
+// as Config.Subject, or from the session, and from nowhere else.
 //
 // A request with no readable session is a declared guest and not an empty
 // subject. The difference matters: an empty subject is refused before the
@@ -533,12 +562,27 @@ func (m *Module) page(ctx *fhttp.Context, title string) view.Page {
 // The tenant of that guest is the application's, from configuration. It is the
 // one place a tenant does not come from a Grant, and it is because there is no
 // Grant yet: everywhere downstream, data.Tenant is what the statements take.
-func (m *Module) subject(r *stdhttp.Request) security.Subject {
+//
+// The configured function is the application's own answer, and its error is
+// the answer to the request rather than a guest: the session store failing to
+// read a cookie is a visitor without one, while an application that could not
+// build the subject it means to act with has failed, and says so.
+func (m *Module) subject(r *stdhttp.Request) (security.Subject, error) {
+	if m.cfg.Subject != nil {
+		sub, err := m.cfg.Subject(r)
+		if err != nil {
+			return security.Subject{}, err
+		}
+		if sub.ID == "" && !sub.IsGuest() {
+			return security.Guest(m.cfg.Tenant), nil
+		}
+		return sub, nil
+	}
 	sub, err := m.sessions.Load(r.Context(), r)
 	if err != nil || sub.ID == "" {
-		return security.Guest(m.cfg.Tenant)
+		return security.Guest(m.cfg.Tenant), nil
 	}
-	return sub
+	return sub, nil
 }
 
 // answer turns what the service refused into something the client can act on.
