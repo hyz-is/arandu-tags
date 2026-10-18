@@ -64,6 +64,26 @@ func ValidTaxonomy(taxonomy string) bool {
 	return true
 }
 
+// MaxColourLen is the longest a colour token may be.
+const MaxColourLen = 32
+
+// validColour reports whether a string can be a colour token: the shape a
+// taxonomy name is held to, and never empty. It is the shape of a class name
+// that needs no escaping, which is how the token reaches a page.
+func validColour(token string) bool {
+	return token != "" && len(token) <= MaxColourLen && ValidTaxonomy(token)
+}
+
+// ColourClass is the class a label of this colour is drawn with, tag--<token>,
+// and the empty string for a label with no colour. The application's
+// stylesheet is what gives the class its look.
+func ColourClass(token string) string {
+	if token == "" {
+		return ""
+	}
+	return "tag--" + token
+}
+
 // Tag is a label an application's entities can carry.
 //
 // It embeds the model, so a row returned by a query carries the connection and
@@ -105,6 +125,12 @@ type Tag struct {
 
 	// UpdatedAt is when the row was last written, in UTC.
 	UpdatedAt time.Time `db:"updated_at"`
+
+	// Colour is the colour token the label is drawn with, one of
+	// Config.Colours, and empty for a label with none. The column is nullable:
+	// a row written before it existed reads as empty, as one written with no
+	// colour does.
+	Colour string `db:"colour"`
 }
 
 // tagTable is the table of Tag. Its query, Tags, is generated beside it by aru
@@ -229,23 +255,24 @@ type Resource struct {
 	name      string
 	slug      string
 	position  int64
+	colour    string
 	createdAt time.Time
 }
 
 // NewResource snapshots one record for the response.
 func NewResource(record Tag) Resource {
-	return newResource(record.ID, record.Type, record.Name, record.Slug, record.Position, record.CreatedAt)
+	return newResource(record.ID, record.Type, record.Name, record.Slug, record.Position, record.Colour, record.CreatedAt)
 }
 
 func resourceFromPointer(record *Tag) Resource {
 	if record == nil {
 		return Resource{}
 	}
-	return newResource(record.ID, record.Type, record.Name, record.Slug, record.Position, record.CreatedAt)
+	return newResource(record.ID, record.Type, record.Name, record.Slug, record.Position, record.Colour, record.CreatedAt)
 }
 
-func newResource(id, taxonomy, name, slug string, position int64, createdAt time.Time) Resource {
-	return Resource{id: id, taxonomy: taxonomy, name: name, slug: slug, position: position, createdAt: createdAt}
+func newResource(id, taxonomy, name, slug string, position int64, colour string, createdAt time.Time) Resource {
+	return Resource{id: id, taxonomy: taxonomy, name: name, slug: slug, position: position, colour: colour, createdAt: createdAt}
 }
 
 // ToArray returns the fields that may leave, by name.
@@ -256,6 +283,7 @@ func (r Resource) ToArray() map[string]any {
 		"name":       r.name,
 		"slug":       r.slug,
 		"position":   strconv.FormatInt(r.position, 10),
+		"colour":     r.colour,
 		"created_at": r.createdAt.UTC().Format(time.RFC3339),
 	}
 }

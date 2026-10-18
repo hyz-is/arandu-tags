@@ -12,7 +12,8 @@
         "taxonomy": "Taxonomia",
         "position": "Posição",
         "created": "Criada em",
-        "search": "Buscar"
+        "search": "Buscar",
+        "colour": "Cor"
     },
     "control": {
         "create": "Criar",
@@ -31,7 +32,8 @@
         "detach": "Desvincular",
         "name_placeholder": "A etiqueta como as pessoas vão ler",
         "search_placeholder": "Buscar etiquetas",
-        "taxonomy_placeholder": "Deixe vazio para a taxonomia sem nome"
+        "taxonomy_placeholder": "Deixe vazio para a taxonomia sem nome",
+        "no_colour": "Sem cor"
     },
     "screen": {
         "index_title": "Etiquetas",

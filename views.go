@@ -129,6 +129,12 @@ type Row struct {
 	// is false everywhere else, because everywhere else there is no entity for
 	// it to be about.
 	Held bool
+	// Colour is the colour token of the label, empty for one with none;
+	// ColourLabel is it as a person reads it, and ColourClass the class it is
+	// drawn with, tag--<token>, which the application's stylesheet styles.
+	Colour      string
+	ColourLabel string
+	ColourClass string
 
 	// URL is the address of this label's own screen, the form that renames it,
 	// and MoveURL is where the ordering screen posts a step for it. Each is
@@ -137,6 +143,17 @@ type Row struct {
 	// which draws no link to either.
 	URL     string
 	MoveURL string
+}
+
+// ColourOption is one colour token as a form offers it.
+type ColourOption struct {
+	// Token is what the form submits, and Label it as a person reads it.
+	Token string
+	Label string
+	// Class is the class a label of this colour is drawn with.
+	Class string
+	// Selected says whether this is the colour the label being edited has.
+	Selected bool
 }
 
 // TaxonomyLink is one taxonomy as the listing draws it: a link to the listing
@@ -182,6 +199,11 @@ type IndexPageData struct {
 	OrderURL  string
 	// NextURL is the following page, and empty on the last one.
 	NextURL string
+
+	// Colours are the tokens the create form offers, from Config.Colours, and
+	// empty when the application gives labels no colour -- in which case the
+	// form draws no choice.
+	Colours []ColourOption
 }
 
 // EditPageData is what the rename screen is handed.
@@ -198,6 +220,10 @@ type EditPageData struct {
 	IndexURL  string
 	UpdateURL string
 	DeleteURL string
+
+	// Colours are the tokens the rename form offers, with the label's own
+	// marked Selected, and empty when the application gives labels no colour.
+	Colours []ColourOption
 }
 
 // OrderPageData is what the ordering screen is handed.
@@ -287,7 +313,35 @@ func (m *Module) row(labels Labels, record *Tag) Row {
 		Taxonomy:      record.Type,
 		TaxonomyLabel: labels.Taxonomy(record.Type),
 		Position:      strconv.FormatInt(record.Position, 10),
+		Colour:        record.Colour,
+		ColourLabel:   labels.Colour(record.Colour),
+		ColourClass:   ColourClass(record.Colour),
 	}
+}
+
+// colourOptions are the configured tokens as a form offers them, the one given
+// marked as chosen.
+func (m *Module) colourOptions(labels Labels, chosen string) []ColourOption {
+	if len(m.cfg.Colours) == 0 {
+		return nil
+	}
+	out := make([]ColourOption, 0, len(m.cfg.Colours))
+	for _, token := range m.cfg.Colours {
+		out = append(out, ColourOption{
+			Token:    token,
+			Label:    labels.Colour(token),
+			Class:    ColourClass(token),
+			Selected: token == chosen,
+		})
+	}
+	return out
+}
+
+// ColourOptions are the colour tokens this application offers, as a form of
+// its own draws them, with chosen marked Selected. It is empty when Config
+// gives labels no colour.
+func (m *Module) ColourOptions(labels Labels, chosen string) []ColourOption {
+	return m.colourOptions(labels, chosen)
 }
 
 // rows snapshots a listing, and says which of them are at its edges.

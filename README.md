@@ -57,7 +57,8 @@ aru migrate
 
 This package owns three tables -- `tags`, `taggables` and `tag_sequences` --
 which is why the migration step is not optional and why `arandu.mod.toml` says
-`migrations = true`.
+`migrations = true`. Run it again after every upgrade that adds a migration:
+v0.6.0 adds the `colour` column to `tags`.
 
 ## Publish the views
 
@@ -112,10 +113,35 @@ boot rather than answering the first request that reaches one of them with a
 | `Policy` | no | the rules. Nil is `TagPolicy`, which denies everything. |
 | `Translator` | no | your catalogue, asked before the one this package ships. |
 | `Subject` | no | who acts on a request to these routes. Nil reads the session store handed to `New`. |
+| `Colours` | no | the colour tokens a label may be given, drawn as the class `tag--<token>`. Empty is no colour. |
 
 `New` returns an error rather than starting half-wired, so a setting that
 cannot work fails where it is written instead of on the first request that
 needed it.
+
+### Colours
+
+A label can carry a colour, from a closed set the application names:
+
+```go
+	Colours: []string{"red", "amber", "green"},
+```
+
+The token is stored on the label and drawn as a class, `tags.ColourClass(token)`
+-- `tag--red` -- which your stylesheet styles. Nothing here writes a colour
+value or a `style` attribute into a page. A token is lowercase letters, digits,
+`-` and `_`, starting with a letter, up to `MaxColourLen`; `New` refuses one
+that is not, or one named twice. `CreateRequest.Colour` and
+`RenameRequest.Colour` set it, and a token outside the set is a rejected input
+on `colour` (422 through the routes). `RenameRequest.Colour` is a pointer: nil
+leaves the colour alone, and a pointer to `""` takes it away; `PATCH /tags/{id}`
+does the same with the `colour` field, changing the colour only when it is sent.
+
+The create and rename forms offer the set when it is not empty, the listing
+draws a badge with the class, and the picker draws the carried badges with it.
+A token reads as the catalogue line `tags.colour.<token>`, or as itself.
+`(*Module).Colours` and `(*Module).ColourOptions` give your own screens the same
+set. The column is added by the migration `20261018_0001_add_tag_colour`.
 
 ### Who the routes act as
 

@@ -127,6 +127,21 @@ type Config struct {
 	//     a visitor, and answering it as one would draw an empty screen where
 	//     the failure should be.
 	Subject func(*http.Request) (security.Subject, error)
+
+	// Colours are the colour tokens a label may be given, and the only ones.
+	//
+	// The set is the application's, because what a colour looks like is its
+	// stylesheet's: a token is a name such as "red" or "status-done", stored on
+	// the label and drawn as the class ColourClass gives it -- tag--red -- for
+	// the application's own CSS to style. Nothing here writes a style or a
+	// value of a colour, so no label carries markup into a page.
+	//
+	// Empty, the default, is no colour support: the forms draw no choice, and a
+	// label created or renamed with a colour is refused as input. A token is
+	// lowercase letters, digits, - and _, starting with a letter, up to
+	// MaxColourLen characters, and each is named once. A token removed from the
+	// set stays on the labels that carry it until they are given another one.
+	Colours []string
 }
 
 // Validate reports what the configuration cannot be used with.
@@ -153,6 +168,16 @@ func (c Config) Validate() error {
 	}
 	if c.PageSize < 0 || c.PageSize > MaxPageSize {
 		return fmt.Errorf("tags: Config.PageSize is %d, and has to be between 0 and %d, where 0 means %d", c.PageSize, MaxPageSize, DefaultPageSize)
+	}
+	seen := make(map[string]bool, len(c.Colours))
+	for _, token := range c.Colours {
+		if !validColour(token) {
+			return fmt.Errorf("tags: Config.Colours holds %q, which cannot be a colour token: lowercase letters, digits, - and _, starting with a letter, up to %d characters", token, MaxColourLen)
+		}
+		if seen[token] {
+			return fmt.Errorf("tags: Config.Colours names %q twice", token)
+		}
+		seen[token] = true
 	}
 	return nil
 }

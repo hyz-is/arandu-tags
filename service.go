@@ -97,6 +97,10 @@ var sortableTag = map[string]string{
 type TagService struct {
 	db     *data.DB
 	policy security.Policy[Tag]
+
+	// colours are the tokens a label may be given, from Config.Colours. A
+	// service built by NewTagService has none, and refuses every colour.
+	colours []string
 }
 
 // NewTagService wires the service over the application's database handle.
@@ -119,9 +123,16 @@ type CreateRequest struct {
 	Name string
 	// Taxonomy is the taxonomy the label joins. Empty is DefaultTaxonomy.
 	Taxonomy string
+	// Colour is the colour token the label is drawn with, one of
+	// Config.Colours. Empty is no colour.
+	Colour string
 }
 
 // Validate reports the errors per field.
+//
+// It holds the colour to the shape of a token. Whether the token is one this
+// application offers is the service's to say, because the set is the
+// application's configuration and a request does not carry it.
 func (r CreateRequest) Validate() validation.Errors {
 	e := validation.Errors{}
 	validation.Required(e, "name", r.Name)
@@ -133,6 +144,9 @@ func (r CreateRequest) Validate() validation.Errors {
 	}
 	if !ValidTaxonomy(r.Taxonomy) {
 		e.Add("type", "may hold lowercase letters, digits, - and _, and has to start with a letter")
+	}
+	if r.Colour != "" && !validColour(r.Colour) {
+		e.Add("colour", "is not a colour token")
 	}
 	return e
 }
@@ -148,6 +162,11 @@ var _ validation.Validatable = CreateRequest{}
 type RenameRequest struct {
 	// Name is what the label will be called from now on.
 	Name string
+	// Colour, when it is not nil, is the colour token the label is drawn with
+	// from now on, and a pointer to the empty string takes its colour away.
+	// Nil leaves the colour as it is, so a caller that only renames writes
+	// nothing about it.
+	Colour *string
 }
 
 // Validate reports the errors per field.
@@ -155,6 +174,26 @@ func (r RenameRequest) Validate() validation.Errors {
 	e := validation.Errors{}
 	validation.Required(e, "name", r.Name)
 	validation.MaxLen(e, "name", r.Name, MaxNameLen)
+	if r.Colour != nil && *r.Colour != "" && !validColour(*r.Colour) {
+		e.Add("colour", "is not a colour token")
+	}
+	return e
+}
+
+// offered refuses a colour token this application does not offer.
+//
+// It runs beside Validate and before the policy, so a colour that cannot be
+// stored is the same 422 as a name that cannot be, whoever asks.
+func (s *TagService) offered(token string) validation.Errors {
+	if token == "" || slices.Contains(s.colours, token) {
+		return nil
+	}
+	e := validation.Errors{}
+	if len(s.colours) == 0 {
+		e.Add("colour", "is not offered: this application gives labels no colour")
+		return e
+	}
+	e.Add("colour", "is not one of the colours this application offers")
 	return e
 }
 
@@ -177,8 +216,11 @@ func (s *TagService) Create(ctx context.Context, actor security.Subject, in Crea
 	if errs := in.Validate(); errs.Any() {
 		return nil, errs
 	}
+	if errs := s.offered(in.Colour); errs.Any() {
+		return nil, errs
+	}
 
-	proposed := Tag{Type: in.Taxonomy, Name: in.Name, Slug: Slugify(in.Name)}
+	proposed := Tag{Type: in.Taxonomy, Name: in.Name, Slug: Slugify(in.Name), Colour: in.Colour}
 
 	g, err := security.Authorize(ctx, s.policy, actor, TagCreate, proposed)
 	if err != nil {
@@ -214,6 +256,7 @@ func (s *TagService) Create(ctx context.Context, actor security.Subject, in Crea
 	candidate.Type = proposed.Type
 	candidate.Name = proposed.Name
 	candidate.Slug = proposed.Slug
+	candidate.Colour = proposed.Colour
 	candidate.Position = position
 	if _, err := candidate.Save(ctx, g); err != nil {
 		return nil, err
@@ -314,10 +357,16 @@ func (s *TagService) List(ctx context.Context, actor security.Subject, taxonomy 
 	return page.OrderBy(column).OrderBy("id").Limit(limit).Get(ctx, g)
 }
 
-// Rename changes what a label is called, leaving its slug and its place alone.
+// Rename changes what a label is called, leaving its slug and its place alone,
+// and changes its colour when the request names one.
 func (s *TagService) Rename(ctx context.Context, actor security.Subject, id string, in RenameRequest) (*Tag, error) {
 	if errs := in.Validate(); errs.Any() {
 		return nil, errs
+	}
+	if in.Colour != nil {
+		if errs := s.offered(*in.Colour); errs.Any() {
+			return nil, errs
+		}
 	}
 
 	g, err := security.Authorize(ctx, s.policy, actor, TagUpdate, Tag{})
@@ -337,6 +386,9 @@ func (s *TagService) Rename(ctx context.Context, actor security.Subject, id stri
 	}
 
 	record.Name = in.Name
+	if in.Colour != nil {
+		record.Colour = *in.Colour
+	}
 	if _, err := record.Save(ctx, g); err != nil {
 		return nil, err
 	}

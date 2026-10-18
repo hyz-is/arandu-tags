@@ -52,6 +52,7 @@ import (
 	"fmt"
 	stdhttp "net/http"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/arandu-io/framework/data"
@@ -61,6 +62,7 @@ import (
 	"github.com/arandu-io/framework/validation"
 	"github.com/arandu-io/hesape/database/migrations"
 	"github.com/arandu-io/hesape/database/schema"
+	hhttp "github.com/arandu-io/hesape/http"
 	"github.com/arandu-io/hesape/translation"
 	"github.com/arandu-io/hesape/view"
 )
@@ -113,7 +115,11 @@ func New(cfg Config, db *data.DB, sessions *security.SessionStore) (*Module, err
 		return nil, errors.New("tags: New needs a session store, or Config.Subject: it is where the subject comes from, and a request with no subject cannot be authorized")
 	}
 	cfg = cfg.withDefaults()
+	// A copy, so the set the forms offer and the set the service accepts cannot
+	// come to differ through a slice the application kept and changed.
+	cfg.Colours = slices.Clone(cfg.Colours)
 	service := NewTagService(db)
+	service.colours = cfg.Colours
 	if cfg.Policy != nil {
 		// The one place the shipped policy is replaced, and it is a field of the
 		// configuration the application already writes rather than a setter: a
@@ -135,6 +141,11 @@ func New(cfg Config, db *data.DB, sessions *security.SessionStore) (*Module, err
 // database handle, so a label written through a route and a label read through
 // a call are the same rows decided by the same policy.
 func (m *Module) Service() *TagService { return m.svc }
+
+// Colours are the colour tokens a label may be given, from Config.Colours, in
+// the order they were configured. It is empty when the application gives labels
+// no colour.
+func (m *Module) Colours() []string { return slices.Clone(m.cfg.Colours) }
 
 // Name is the module identifier: a lowercase slug, stable, no spaces.
 //
@@ -307,6 +318,7 @@ func (m *Module) index(ctx *fhttp.Context) error {
 		StoreURL:      ctx.URL("tags.store"),
 		OrderURL:      m.orderingOf(ctx, taxonomy),
 		NextURL:       next,
+		Colours:       m.colourOptions(labels, ""),
 	})
 }
 
@@ -334,12 +346,13 @@ func (m *Module) show(ctx *fhttp.Context) error {
 		IndexURL:  m.listingOf(ctx, record.Type),
 		UpdateURL: ctx.URL("tags.update", url.PathEscape(record.ID)),
 		DeleteURL: ctx.URL("tags.destroy", url.PathEscape(record.ID)),
+		Colours:   m.colourOptions(labels, record.Colour),
 	})
 }
 
 // store creates one record.
 func (m *Module) store(ctx *fhttp.Context) error {
-	in := CreateRequest{Name: ctx.Input("name"), Taxonomy: ctx.Input("type")}
+	in := CreateRequest{Name: ctx.Input("name"), Taxonomy: ctx.Input("type"), Colour: ctx.Input("colour")}
 
 	actor, err := m.subject(ctx.Request)
 	if err != nil {
@@ -355,9 +368,17 @@ func (m *Module) store(ctx *fhttp.Context) error {
 	return ctx.Redirect(m.listingOf(ctx, record.Type))
 }
 
-// update renames one record.
+// update renames one record, and recolours it when the input names a colour.
+//
+// The colour is changed only when the field was sent at all, so a client that
+// renames -- including a form published before colours existed -- leaves the
+// colour as it was, and a field sent empty takes it away.
 func (m *Module) update(ctx *fhttp.Context) error {
 	in := RenameRequest{Name: ctx.Input("name")}
+	if hhttp.NewRequest(ctx.Request).Has("colour") {
+		colour := ctx.Input("colour")
+		in.Colour = &colour
+	}
 
 	actor, err := m.subject(ctx.Request)
 	if err != nil {
@@ -632,7 +653,7 @@ func (m *Module) answer(ctx *fhttp.Context, err error) error {
 // They are returned in the order their names sort in, which is the order they
 // apply in: the name carries the order, and nothing else decides it.
 func (m *Module) Migrations() []foundation.Migration {
-	return []foundation.Migration{createTagTables{}}
+	return []foundation.Migration{createTagTables{}, addTagColour{}}
 }
 
 // The migration is reversible, and the assertion is here rather than discovered
@@ -734,4 +755,32 @@ func (createTagTables) Down(ctx context.Context, conn migrations.Connection) err
 		return err
 	}
 	return conn.Schema().DropIfExists(ctx, TagTable)
+}
+
+var _ migrations.ReversibleMigration = addTagColour{}
+
+// addTagColour gives a label the colour token it is drawn with.
+//
+// The column is nullable and has no default, so the rows already there read as
+// labels with no colour, and a binary from before it keeps writing rows that
+// leave it empty: the migration can run before the deploy that reads it, which
+// is the order a rollout runs in.
+type addTagColour struct{ migrations.BaseMigration }
+
+// GetName is the migration's identity, and it carries the order: it sorts
+// after the migration that created the table it changes.
+func (addTagColour) GetName() string { return "20261018_0001_add_tag_colour" }
+
+// Up adds the column.
+func (addTagColour) Up(ctx context.Context, conn migrations.Connection) error {
+	return conn.Schema().Table(ctx, TagTable, func(table *schema.Blueprint) {
+		table.String("colour").Nullable()
+	})
+}
+
+// Down drops the column, and with it the colour of every label.
+func (addTagColour) Down(ctx context.Context, conn migrations.Connection) error {
+	return conn.Schema().Table(ctx, TagTable, func(table *schema.Blueprint) {
+		table.DropColumn("colour")
+	})
 }

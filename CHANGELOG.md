@@ -20,6 +20,24 @@ are gone.
 
 ### Added
 
+- A label has a colour. `Config.Colours` is the closed set of colour tokens
+  the application offers -- lowercase letters, digits, `-` and `_`, starting
+  with a letter, up to `MaxColourLen` -- and empty, the default, is no colour
+  support. `Tag.Colour`, `CreateRequest.Colour` and `RenameRequest.Colour` (a
+  pointer: nil leaves the colour alone, a pointer to `""` takes it away) carry
+  it, and a token outside the set is a rejected input on `colour`. The
+  resource answers `colour`. The screens draw it as the class
+  `ColourClass(token)`, `tag--<token>`, for the application's stylesheet, and
+  never as a style; the create and rename forms offer the set when it is not
+  empty, through `IndexPageData.Colours` and `EditPageData.Colours` of
+  `ColourOption`, and `Row` carries `Colour`, `ColourLabel` and `ColourClass`.
+  `(*Module).Colours`, `(*Module).ColourOptions` and `Labels.Colour` answer
+  the same set and names to an application's own screens; a token's name is
+  the catalogue line `tags.colour.<token>`, or the token. New lines
+  `field.colour` and `control.no_colour` in `en` and `pt-BR`.
+- The migration `20261018_0001_add_tag_colour`, which adds the nullable column
+  `tags.colour`. Run `aru migrate` before deploying this version.
+
 - `Config.Subject`, a `func(*http.Request) (security.Subject, error)` the
   module's own routes ask who is acting when it is set, instead of the session
   store. An application whose members act inside a selected organization

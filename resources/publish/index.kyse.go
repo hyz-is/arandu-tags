@@ -68,6 +68,15 @@ type IndexData = tags.IndexPageData
 						<p class="text-muted-foreground mt-1 truncate text-xs">{{ row.Slug }}</p>
 					</div>
 					<div class="flex items-center gap-2">
+						{{-- The colour is a class and only a class: tag--<token>, which
+						     the application's stylesheet styles. No colour value is
+						     written into the page. --}}
+						@if(row.Colour != "")
+							{!! components.Badge(components.BadgeProps{
+								Label:          row.ColourLabel,
+								ComponentProps: components.ComponentProps{Class: row.ColourClass},
+							}) !!}
+						@endif
 						{!! components.Badge(components.BadgeProps{Label: row.TaxonomyLabel, Variant: "outline"}) !!}
 						<span class="text-muted-foreground text-xs">{{ row.Position }}</span>
 					</div>
@@ -97,6 +106,17 @@ type IndexData = tags.IndexPageData
 			Required:    true,
 			Page:        .Form(),
 		}) !!}
+		@if(len(.Colours) > 0)
+			<div class="grid gap-2">
+				{!! components.Label(components.LabelProps{For: "colour", Text: .Labels.T("field.colour")}) !!}
+				<select class="select" id="colour" name="colour">
+					<option value="">{{ .Labels.T("control.no_colour") }}</option>
+					@foreach(.Colours as colour)
+						<option class="{{ colour.Class }}" value="{{ colour.Token }}">{{ colour.Label }}</option>
+					@endforeach
+				</select>
+			</div>
+		@endif
 		<div>
 			{!! components.Button(components.ButtonProps{Label: .Labels.T("control.create"), Type: "submit"}) !!}
 		</div>

@@ -81,6 +81,7 @@ route that authorized correctly. The migration has not run.
 | `Policy` | no | the rules. Nil is `TagPolicy`, which denies everything |
 | `Translator` | no | the application's catalogue, asked before the one this package ships |
 | `Subject` | no | who acts on a request to the routes: `func(*http.Request) (security.Subject, error)`. Nil reads the session store. Pass the application's own subject builder when members act inside a selected organization |
+| `Colours` | no | the colour tokens a label may be given, drawn as the class `tag--<token>` for the application's stylesheet. Empty is no colour |
 
 `Tenant` is the one place a tenant does not come from a `Grant`, and it is
 because a visitor with no session has no `Grant` yet. Everywhere else the tenant

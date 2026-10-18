@@ -12,7 +12,8 @@
         "taxonomy": "Taxonomy",
         "position": "Position",
         "created": "Created",
-        "search": "Search"
+        "search": "Search",
+        "colour": "Colour"
     },
     "control": {
         "create": "Create",
@@ -31,7 +32,8 @@
         "detach": "Detach",
         "name_placeholder": "The label as people will read it",
         "search_placeholder": "Search labels",
-        "taxonomy_placeholder": "Leave empty for the taxonomy with no name"
+        "taxonomy_placeholder": "Leave empty for the taxonomy with no name",
+        "no_colour": "No colour"
     },
     "screen": {
         "index_title": "Tags",

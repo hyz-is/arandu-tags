@@ -427,6 +427,23 @@ func TestTheRequestValidatesItsInput(t *testing.T) {
 	if errs := (tags.CreateRequest{Name: "one"}).Validate(); errs.Any() {
 		t.Fatalf("a valid request was rejected: %v", errs)
 	}
+	if errs := (tags.CreateRequest{Name: "one", Colour: "not a token"}).Validate(); !errs.Any() {
+		t.Fatal("a colour that cannot be a token validated")
+	}
+	bad := "Red"
+	if errs := (tags.RenameRequest{Name: "one", Colour: &bad}).Validate(); !errs.Any() {
+		t.Fatal("a rename to a colour that cannot be a token validated")
+	}
+	none := ""
+	if errs := (tags.RenameRequest{Name: "one", Colour: &none}).Validate(); errs.Any() {
+		t.Fatalf("a rename that takes the colour away was rejected: %v", errs)
+	}
+	if got := tags.ColourClass("red"); got != "tag--red" {
+		t.Fatalf("the class of red is %q, want tag--red", got)
+	}
+	if got := tags.ColourClass(""); got != "" {
+		t.Fatalf("a label with no colour is drawn with the class %q", got)
+	}
 }
 
 func TestTheConfigurationRefusesWhatCannotWork(t *testing.T) {
@@ -439,6 +456,12 @@ func TestTheConfigurationRefusesWhatCannotWork(t *testing.T) {
 		"relative prefix":    {Tenant: "acme", Prefix: "tags"},
 		"page size too big":  {Tenant: "acme", PageSize: tags.MaxPageSize + 1},
 		"negative page size": {Tenant: "acme", PageSize: -1},
+		"empty colour":       {Tenant: "acme", Colours: []string{""}},
+		"colour uppercase":   {Tenant: "acme", Colours: []string{"Red"}},
+		"colour with space":  {Tenant: "acme", Colours: []string{"dark red"}},
+		"colour with ;":      {Tenant: "acme", Colours: []string{"red;color:blue"}},
+		"colour too long":    {Tenant: "acme", Colours: []string{strings.Repeat("r", tags.MaxColourLen+1)}},
+		"colour named twice": {Tenant: "acme", Colours: []string{"red", "red"}},
 	} {
 		if err := cfg.Validate(); err == nil {
 			t.Errorf("the configuration with %s was accepted", name)
@@ -447,6 +470,9 @@ func TestTheConfigurationRefusesWhatCannotWork(t *testing.T) {
 
 	if err := (tags.Config{Tenant: "acme"}).Validate(); err != nil {
 		t.Fatalf("a valid configuration was refused: %v", err)
+	}
+	if err := (tags.Config{Tenant: "acme", Colours: []string{"red", "status-done", "tone_2"}}).Validate(); err != nil {
+		t.Fatalf("a valid set of colours was refused: %v", err)
 	}
 }
 

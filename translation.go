@@ -167,6 +167,18 @@ func (l Labels) Taxonomy(taxonomy string) string {
 	return l.module.lineOr(l.Locale, TranslationGroup+".taxonomy."+taxonomy, taxonomy)
 }
 
+// Colour is what a person reads in place of a colour token.
+//
+// It is the line tags.colour.<token> when the application or this package has
+// written one, and the token itself otherwise: the token is the name the
+// application's own developers chose, which is a better answer than a key.
+func (l Labels) Colour(token string) string {
+	if token == "" || l.module == nil {
+		return token
+	}
+	return l.module.lineOr(l.Locale, TranslationGroup+".colour."+token, token)
+}
+
 // line reads a key, asking the application's translator first.
 //
 // Two translators and one rule: the application's wins wherever it has a line,

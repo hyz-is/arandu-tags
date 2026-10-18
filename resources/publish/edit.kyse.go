@@ -52,6 +52,26 @@ type EditData = tags.EditPageData
 			Autofocus: true,
 			Page:      .Form(),
 		}) !!}
+		{{-- Drawn only when the application offers colours, so a rename
+		     sends no colour field and leaves the colour alone. Sent empty, the
+		     field takes the colour away. --}}
+		@if(len(.Colours) > 0)
+			<div class="grid gap-2">
+				{!! components.Label(components.LabelProps{For: "colour", Text: .Labels.T("field.colour")}) !!}
+				<select class="select" id="colour" name="colour">
+					<option value="">{{ .Labels.T("control.no_colour") }}</option>
+					@foreach(.Colours as colour)
+						<option
+							class="{{ colour.Class }}"
+							value="{{ colour.Token }}"
+							@if(colour.Selected)
+								selected
+							@endif
+						>{{ colour.Label }}</option>
+					@endforeach
+				</select>
+			</div>
+		@endif
 		<div class="flex items-center gap-2">
 			{!! components.Button(components.ButtonProps{Label: .Labels.T("control.save"), Type: "submit"}) !!}
 			<a class="btn" data-variant="ghost" href="{{ .IndexURL }}">

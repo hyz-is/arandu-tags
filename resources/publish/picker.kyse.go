@@ -67,7 +67,11 @@ type PickerData = tags.PickerData
 	@if(len(.Carried) > 0)
 		<ul class="flex flex-wrap gap-2">
 			@foreach(.Carried as row)
-				<li>{!! components.Badge(components.BadgeProps{Label: row.Label, Variant: "secondary"}) !!}</li>
+				<li>{!! components.Badge(components.BadgeProps{
+					Label:          row.Label,
+					Variant:        "secondary",
+					ComponentProps: components.ComponentProps{Class: row.ColourClass},
+				}) !!}</li>
 			@endforeach
 		</ul>
 	@endif

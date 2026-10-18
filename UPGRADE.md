@@ -10,7 +10,60 @@ before `v0.1.0` here. They are gone.
 
 No symbol is removed or changed, and no route, action, policy decision or
 tenant rule changes. Everything in this release is added, and an application
-that sets none of it behaves as it did on v0.5.2.
+that sets none of it behaves as it did on v0.5.2 -- once the migration below has
+run.
+
+### Run the migration before deploying
+
+This release adds `20261018_0001_add_tag_colour`, which adds the nullable column
+`tags.colour`. The `Tag` this release reads and writes has the column, so a
+binary of this release against a database that has not run it fails to write a
+label:
+
+```sh
+aru migrate
+```
+
+Run it before the deploy, as for every migration. The column is nullable with
+no default, so v0.5.2 keeps working against the migrated database during a
+rollout, and every existing label reads as one with no colour.
+
+### Colours
+
+`Config.Colours` is new, and empty means what v0.5.2 did: no colour, no choice
+on the forms, and a colour sent to `Create` or `Rename` refused as input on
+`colour`. To offer colours, name the tokens and style their classes:
+
+```go
+tags.New(tags.Config{
+	Tenant:  cfg.Auth.Tenant,
+	Policy:  TagRules{},
+	Colours: []string{"red", "amber", "green"},
+}, db, sessions)
+```
+
+```css
+.tag--red   { background: var(--color-red-100);   color: var(--color-red-900); }
+.tag--amber { background: var(--color-amber-100); color: var(--color-amber-900); }
+.tag--green { background: var(--color-green-100); color: var(--color-green-900); }
+```
+
+The class is assembled from the token at run time, so the rules have to be in
+the application's stylesheet: a utility compiler that scans the markup does not
+find them. A token is named for people by the catalogue line
+`tags.colour.<token>`, and reads as the token itself until one is written.
+
+Three things change shape without breaking a caller:
+
+- The resource answers a `colour` key beside the others, `""` for a label with
+  none.
+- `RenameRequest.Colour` is a `*string`. A literal that does not set it leaves
+  the colour as it is, so `RenameRequest{Name: name}` renames exactly as before.
+- `PATCH /tags/{id}` changes the colour only when the input carries a `colour`
+  field. A rename form published before this release sends none.
+
+Republish the views to get the colour on the forms, the listing and the
+picker's badges; views published before keep compiling and draw no colour.
 
 ### The routes can act as the subject the application builds
 
@@ -34,7 +87,8 @@ session store.
 
 ### The picker
 
-Republish it to get the two changes below. A picker published before keeps
+Republish it to get the two changes below, and the colour of the carried
+badges. A picker published before keeps
 compiling against this release and draws what it drew.
 
 ```sh
