@@ -6,6 +6,69 @@ was cloned from -- `v0.4.0` and `v0.2.0`, with the entity renamed into them,
 describing a publishing migration and a Repository removal that both happened
 before `v0.1.0` here. They are gone.
 
+## Unreleased
+
+### Go 1.26.10 is the floor
+
+`go.mod` declares `go 1.26.10`. Every vulnerability an Arandu application
+reaches is in the Go standard library (crypto/x509, the HTTP/2 and CONNECT
+handling in net/http, html/template, net/textproto and crypto/tls) and is
+fixed in Go 1.26.10, so a module that declared less let a build run on a
+toolchain that still carries them. Build with Go 1.26.10 or later.
+
+The package compiles against newer Arandu modules, and `arandu.mod.toml` now
+declares `framework = ">= 0.66"`:
+
+| | was | is |
+|---|---|---|
+| `github.com/arandu-io/framework` | `v0.56.0` | `v0.66.0` |
+| `github.com/arandu-io/hesape` | `v0.54.0` | `v0.85.0` |
+
+```bash
+go get github.com/arandu-io/framework@v0.66.0
+go get github.com/arandu-io/hesape@v0.85.0
+```
+
+An application below those follows the Framework and Hesape upgrade guides
+between the versions it had and these first. No route, migration, action,
+tenant rule or published view of this package changes.
+
+### `New` and `(*Module).Routes` read the same and compile unchanged
+
+`apidiff` against `v0.6.0` names two incompatible changes, and neither asks
+anything of a caller:
+
+- `New`: its `*security.SessionStore` parameter is now an alias of Hesape's
+  `http.SessionStore`, so the signature reads the same and the store an
+  application already passes is the same type.
+- `(*Module).Routes`: the framework's `http.Router` is now an alias of
+  Hesape's controller router, with the same consequence.
+
+The page data the screens draw from -- `IndexPageData`, `EditPageData`,
+`OrderPageData` and `FormState` -- gains the fields Hesape's `view.Page` added
+(`Messages`, `Impersonating`, `Impersonator`, `ImpersonationActs`,
+`LeaveImpersonationURL`). A published view that does not read them renders as
+it did.
+
+### `TagPolicy` says which actions write
+
+`TagPolicy` implements `auth.Writes`: `tag.view` and `tag.list` read, and the
+Grant `Authorize` issues for either is refused by every write with
+`auth.ErrReadGrant`. Nothing this package does writes with such a Grant, so the
+routes and the service behave as they did.
+
+An application that passes its own policy in `Config.Policy` should declare the
+same, so that a Grant issued for reading a label cannot save, delete or
+attach one -- `aru doctor` reports a policy that does not as
+`policy-declares-no-writes`. Delegate to the shipped answer rather than
+restating it:
+
+```go
+func (TagRules) Writes(a security.Action) bool { return tags.TagPolicy{}.Writes(a) }
+```
+
+A policy without the method keeps issuing Grants that write, as before.
+
 ## v0.6.0
 
 No symbol is removed or renamed, and no route, action, policy decision or
