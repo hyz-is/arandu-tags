@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/arandu-io/framework/security"
+	"github.com/arandu-io/hesape/auth"
 )
 
 // The actions of Tag. Constants rather than strings at the call site: a
@@ -47,6 +48,25 @@ type TagPolicy struct{}
 // policy that drifted onto another type would leave this one unguarded while
 // the Model path still compiled.
 var _ security.Policy[Tag] = TagPolicy{}
+
+// Compile-time proof that the policy says which of its actions write.
+var _ auth.Writes = TagPolicy{}
+
+// Writes reports whether a Grant issued for the action may write. TagView and
+// TagList read, so the Grant Authorize issues for either is refused by every
+// write -- the database, the cache, the outbox -- with auth.ErrReadGrant.
+//
+// The set is closed and written out: an action added later reads until it is
+// named here, so a Grant issued for it cannot write by accident. An
+// application that passes its own policy in Config.Policy answers Writes by
+// calling this method, so both policies agree on which actions write.
+func (TagPolicy) Writes(a security.Action) bool {
+	switch a {
+	case TagCreate, TagUpdate, TagDelete, TagAttach, TagDetach:
+		return true
+	}
+	return false
+}
 
 // Can decides whether the subject may perform the action on the record.
 //

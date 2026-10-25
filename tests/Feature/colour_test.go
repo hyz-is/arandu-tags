@@ -23,6 +23,9 @@ import (
 // what these tests need to reach every route; the tenant comparison stays.
 type colourRules struct{}
 
+// Writes answers as the shipped policy does.
+func (colourRules) Writes(a security.Action) bool { return tags.TagPolicy{}.Writes(a) }
+
 func (colourRules) Can(_ context.Context, s security.Subject, _ security.Action, record tags.Tag) error {
 	if record.ID != "" && record.TenantID != s.Tenant {
 		return security.ErrForbidden

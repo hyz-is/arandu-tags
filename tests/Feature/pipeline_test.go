@@ -71,6 +71,9 @@ type visitorRules struct{}
 
 var _ security.Policy[tags.Tag] = visitorRules{}
 
+// Writes answers as the shipped policy does.
+func (visitorRules) Writes(a security.Action) bool { return tags.TagPolicy{}.Writes(a) }
+
 func (visitorRules) Can(_ context.Context, s security.Subject, a security.Action, record tags.Tag) error {
 	if record.ID != "" && record.TenantID != s.Tenant {
 		return fmt.Errorf("the tag belongs to another tenant")

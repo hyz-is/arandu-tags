@@ -40,6 +40,9 @@ func newMemberRules() memberRules {
 	return memberRules{mu: new(sync.Mutex), asked: new([]security.Subject)}
 }
 
+// Writes answers as the shipped policy does.
+func (memberRules) Writes(a security.Action) bool { return tags.TagPolicy{}.Writes(a) }
+
 func (p memberRules) Can(_ context.Context, s security.Subject, a security.Action, record tags.Tag) error {
 	p.mu.Lock()
 	*p.asked = append(*p.asked, s)

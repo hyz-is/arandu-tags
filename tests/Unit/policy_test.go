@@ -12,6 +12,7 @@ import (
 
 	"github.com/arandu-io/framework/data"
 	"github.com/arandu-io/framework/security"
+	"github.com/arandu-io/hesape/auth"
 	"github.com/arandu-io/hesape/database/model"
 	"github.com/arandu-io/hesape/database/query"
 
@@ -524,4 +525,55 @@ var _ security.Policy[tags.Tag] = countingPolicy{}
 
 func (countingPolicy) Can(context.Context, security.Subject, security.Action, tags.Tag) error {
 	return nil
+}
+
+func (countingPolicy) Writes(a security.Action) bool { return tags.TagPolicy{}.Writes(a) }
+
+func TestAGrantIssuedToReadATagCannotWrite(t *testing.T) {
+	t.Parallel()
+
+	writes := map[security.Action]bool{
+		tags.TagView:   false,
+		tags.TagList:   false,
+		tags.TagCreate: true,
+		tags.TagUpdate: true,
+		tags.TagDelete: true,
+		tags.TagAttach: true,
+		tags.TagDetach: true,
+	}
+	if len(writes) != len(everyAction) {
+		t.Fatalf("the table answers %d actions, the policy %d", len(writes), len(everyAction))
+	}
+	for _, action := range everyAction {
+		t.Run(string(action), func(t *testing.T) {
+			t.Parallel()
+
+			want, named := writes[action]
+			if !named {
+				t.Fatalf("%s is missing from the table", action)
+			}
+			if got := (tags.TagPolicy{}).Writes(action); got != want {
+				t.Fatalf("TagPolicy.Writes(%s) = %v, want %v", action, got, want)
+			}
+
+			g, err := security.Authorize(context.Background(), countingPolicy{},
+				administrator(), action, tags.Tag{})
+			if err != nil {
+				t.Fatalf("authorize %s: %v", action, err)
+			}
+			err = auth.Writable(g)
+			if want && err != nil {
+				t.Fatalf("a Grant for %s refused to write: %v", action, err)
+			}
+			if !want && !errors.Is(err, auth.ErrReadGrant) {
+				t.Fatalf("a Grant for %s wrote: got %v, want ErrReadGrant", action, err)
+			}
+		})
+	}
+
+	// An action the policy does not name reads, so one added later cannot
+	// write until somebody says it does.
+	if (tags.TagPolicy{}).Writes("tag.export") {
+		t.Fatal("an action the policy does not name was allowed to write")
+	}
 }

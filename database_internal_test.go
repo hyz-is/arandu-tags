@@ -55,6 +55,10 @@ var _ security.Policy[Tag] = openPolicy{}
 // Can allows everything.
 func (openPolicy) Can(context.Context, security.Subject, security.Action, Tag) error { return nil }
 
+// Writes answers as the shipped policy does, so every Grant this suite issues
+// for reading is one the writes it reaches would refuse.
+func (openPolicy) Writes(a security.Action) bool { return TagPolicy{}.Writes(a) }
+
 // openService is a service over a migrated database, with the policy opened.
 func openService(t *testing.T, name string) *TagService {
 	t.Helper()

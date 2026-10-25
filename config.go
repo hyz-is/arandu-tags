@@ -95,6 +95,8 @@ type Config struct {
 	//		return nil
 	//	}
 	//
+	//	func (TagRules) Writes(a security.Action) bool { return tags.TagPolicy{}.Writes(a) }
+	//
 	// The tenant comparison is the line to keep whatever else is written: every
 	// rule below it holds across customers without it, as soon as two of them
 	// have a record with the same identifier.
