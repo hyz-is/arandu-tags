@@ -18,7 +18,7 @@ go get github.com/hyz-is/arandu-tags
 
 An Arandu application registers a module explicitly. There is no service
 provider, no container and no discovery, so these are the lines to paste into
-`bootstrap/app.go` and there are no others.
+`bootstrap/app.go`, and the views add one import below.
 
 The import, with the other module imports:
 
@@ -28,8 +28,10 @@ import (
 )
 ```
 
-The construction, in `Build`, after the session store exists and before
-`k.Register`:
+The construction, in `App`, once `NewAppServiceProvider` has returned. `New`
+refuses a wiring that cannot work and `Configure` has no way to return that
+error, so the module is built where the error can leave; the database and the
+session store are the ones the framework built from the configuration:
 
 ```go
 	tagsModule, err := tags.New(tags.Config{
@@ -37,16 +39,20 @@ The construction, in `Build`, after the session store exists and before
 		// The rules. Nil is the policy this package ships, which denies
 		// everything -- see "Write the policy" below.
 		Policy: TagRules{},
-	}, db, sessions)
+	}, drivers.DB, drivers.Sessions)
 	if err != nil {
-		return App{}, err
+		_ = drivers.Close()
+		return nil, err
 	}
 ```
 
-And the registration, inside the `k.Register(...)` call already there:
+And the registration, in the `WithProviders(...)` chain the builder is made of:
 
 ```go
-		tagsModule,
+	return Configure(cfg, drivers, app).
+		WithProviders(tagsModule).
+		WithVersion(version, commit).
+		Create()
 ```
 
 Then, once, before the application serves:
@@ -156,7 +162,7 @@ Pass the function your own handlers build it with:
 		Tenant:  cfg.Auth.Tenant,
 		Policy:  TagRules{},
 		Subject: organizations.SubjectOf, // func(*http.Request) (security.Subject, error)
-	}, db, sessions)
+	}, drivers.DB, drivers.Sessions)
 ```
 
 The tenant of the subject it answers is the tenant every statement is scoped
