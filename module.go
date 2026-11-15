@@ -42,7 +42,7 @@
 //
 // Every handler answers a screen or a resource, and what decides is
 // ctx.WantsJSON -- the framework's own question, so that this package does not
-// invent a second rule for which requests get markup. htmx is on the screen side
+// invent a second rule for which requests get markup. YPY is on the screen side
 // of that line, because it swaps HTML.
 package tags
 
@@ -253,7 +253,7 @@ func (m *Module) Boot(context.Context) error {
 // Every one of them answers in two shapes, and the choice is not this package's
 // to invent: ctx.WantsJSON is the framework's own question, asked once per
 // handler. A browser gets the screen, something that asked for JSON gets the
-// resource, and htmx -- which swaps markup -- is deliberately on the screen side
+// resource, and YPY -- which swaps markup -- is deliberately on the screen side
 // of that line.
 
 // index answers a page of one taxonomy, as the listing or as a collection.

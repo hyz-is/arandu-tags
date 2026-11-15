@@ -6,6 +6,29 @@ was cloned from -- `v0.4.0` and `v0.2.0`, with the entity renamed into them,
 describing a publishing migration and a Repository removal that both happened
 before `v0.1.0` here. They are gone.
 
+## Unreleased
+
+### The published views speak YPY
+
+The four views this package publishes (`edit`, `index`, `order` and `picker`)
+now write their attributes the way YPY reads them: `ypy-patch`, `ypy-delete`,
+`ypy-post` and `ypy-confirm`, where they carried the prefix of the old library.
+No Go symbol, route, migration, action or tenant rule changes.
+
+A project that published the views republishes them, because a file it
+published before keeps the attributes of the old library and a page running
+`ypy.min.js` does not read them:
+
+```sh
+aru vendor:publish --tag=view --apply
+aru view:build
+```
+
+A file you never edited is updated. One you edited outside its
+`arandu:begin custom` markers is reported as a conflict and left alone; publish
+it with `--force`, which keeps what is inside the markers, and rename the
+attributes of your own edits by hand.
+
 ## v0.7.0
 
 ### Go 1.26.10 is the floor
@@ -278,7 +301,7 @@ that, `{{ .Prefix }}/{{ row.ID }}` and its siblings, so a project that
 published them stops at `aru view:build`:
 
 ```
-resources/views/modules/tags/edit.kyse.go:45: this value is written into "hx-patch" before the scheme and the host of the address are fixed
+resources/views/modules/tags/edit.kyse.go:45: this value is written into "ypy-patch" before the scheme and the host of the address are fixed
 ```
 
 The page data now carries each address whole, and the views write it as one
@@ -313,8 +336,8 @@ Each composed address becomes the field that carries it:
 | was | is |
 | --- | --- |
 | `{{ .Prefix }}?type={{ .Row.Taxonomy }}` (rename screen) | `{{ .IndexURL }}` |
-| `hx-patch="{{ .Prefix }}/{{ .Row.ID }}"` | `{{ .UpdateURL }}` |
-| `hx-delete="{{ .Prefix }}/{{ .Row.ID }}"` | `{{ .DeleteURL }}` |
+| `ypy-patch="{{ .Prefix }}/{{ .Row.ID }}"` | `{{ .UpdateURL }}` |
+| `ypy-delete="{{ .Prefix }}/{{ .Row.ID }}"` | `{{ .DeleteURL }}` |
 | `{{ .Prefix }}/order?type={{ .Taxonomy }}` | `{{ .OrderURL }}` |
 | `@foreach(.Taxonomies as taxonomy)` with `{{ .Prefix }}?type={{ taxonomy }}` and `.Labels.Taxonomy(taxonomy)` | `@foreach(.TaxonomyLinks as taxonomy)` with `{{ taxonomy.URL }}` and `{{ taxonomy.Label }}` |
 | `action="{{ .Prefix }}"`, `method="get"` | `{{ .SearchURL }}` |
@@ -322,8 +345,8 @@ Each composed address becomes the field that carries it:
 | `{{ .Prefix }}/{{ row.ID }}` | `{{ row.URL }}` |
 | `@if(.Next != "")` with `{{ .Prefix }}?type={{ .Taxonomy }}&amp;cursor={{ .Next }}` | `@if(.NextURL != "")` with `{{ .NextURL }}` |
 | `{{ .Prefix }}?type={{ .Taxonomy }}` (ordering screen) | `{{ .IndexURL }}` |
-| `hx-post="{{ .Prefix }}/{{ row.ID }}/move"` | `{{ row.MoveURL }}` |
-| `hx-post="{{ .Prefix }}/order"` | `{{ .ReorderURL }}` |
+| `ypy-post="{{ .Prefix }}/{{ row.ID }}/move"` | `{{ row.MoveURL }}` |
+| `ypy-post="{{ .Prefix }}/order"` | `{{ .ReorderURL }}` |
 
 `Prefix`, `Taxonomies` and `Next` are still filled, so a view compiled before
 keeps compiling against this release until it is republished. A row an

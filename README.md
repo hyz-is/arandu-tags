@@ -183,7 +183,7 @@ is not read and `New` accepts a nil one.
 Each of them answers twice over: a browser gets the screen, and a request that
 asked for JSON gets the resource. What decides is `ctx.WantsJSON()`, the
 framework's own question, so this package invents no second rule about it — and
-htmx is on the screen side of that line, because it swaps markup.
+YPY is on the screen side of that line, because it swaps markup.
 
 `index`, `order` and `store` read the taxonomy from `type`; leaving it out is
 the taxonomy with no name. `index` narrows on `q`.

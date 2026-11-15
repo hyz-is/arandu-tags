@@ -118,7 +118,7 @@ route:list` shows them grouped by module. Under a custom `Prefix` the paths move
 and the names do not.
 
 Every one of them answers twice over. `ctx.WantsJSON()` decides — the
-framework's own question, so this package invents no second rule — and htmx is
+framework's own question, so this package invents no second rule — and YPY is
 on the screen side of it, because it swaps markup.
 
 `GET /tags` as JSON answers `{"data": {"items": [...]}}`, and adds

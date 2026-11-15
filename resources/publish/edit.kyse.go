@@ -38,11 +38,11 @@ type EditData = tags.EditPageData
 		</div>
 	</dl>
 
-	{{-- The rename is a PATCH and the delete a DELETE, carried by htmx rather
+	{{-- The rename is a PATCH and the delete a DELETE, carried by YPY rather
 	     than by the form element: a browser form sends GET or POST and nothing
 	     else, and spelling the verb into a hidden field is a second place for a
 	     route to be written down. --}}
-	<form class="mt-8 grid gap-3" hx-patch="{{ .UpdateURL }}">
+	<form class="mt-8 grid gap-3" ypy-patch="{{ .UpdateURL }}">
 		@csrf
 		{!! components.Field(components.FieldProps{
 			Name:      "name",
@@ -81,8 +81,8 @@ type EditData = tags.EditPageData
 	</form>
 
 	<form class="mt-10 border-t pt-6"
-	      hx-delete="{{ .DeleteURL }}"
-	      hx-confirm="{{ .Labels.T("message.deleted") }}">
+	      ypy-delete="{{ .DeleteURL }}"
+	      ypy-confirm="{{ .Labels.T("message.deleted") }}">
 		@csrf
 		{!! components.Button(components.ButtonProps{
 			Label:   .Labels.T("control.delete"),

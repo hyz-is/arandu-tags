@@ -23,7 +23,7 @@ type PickerData = tags.PickerData
 <section class="grid gap-4">
 	<h2 class="text-sm font-semibold tracking-tight">{{ .Labels.T("screen.picker_title") }}</h2>
 
-	<form class="grid gap-3" hx-post="{{ .Action }}">
+	<form class="grid gap-3" ypy-post="{{ .Action }}">
 		<input type="hidden" name="_token" value="{{ .Token }}">
 		<input type="hidden" name="type" value="{{ .Taxonomy }}">
 

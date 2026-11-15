@@ -38,7 +38,7 @@ type OrderData = tags.OrderPageData
 						<span class="text-muted-foreground ml-2 font-mono text-xs">{{ row.Position }}</span>
 					</div>
 					<div class="flex items-center gap-1">
-						<form hx-post="{{ row.MoveURL }}">
+						<form ypy-post="{{ row.MoveURL }}">
 							@csrf
 							<input type="hidden" name="direction" value="start">
 							{!! components.Button(components.ButtonProps{
@@ -49,7 +49,7 @@ type OrderData = tags.OrderPageData
 								Disabled: row.First,
 							}) !!}
 						</form>
-						<form hx-post="{{ row.MoveURL }}">
+						<form ypy-post="{{ row.MoveURL }}">
 							@csrf
 							<input type="hidden" name="direction" value="up">
 							{!! components.Button(components.ButtonProps{
@@ -60,7 +60,7 @@ type OrderData = tags.OrderPageData
 								Disabled: row.First,
 							}) !!}
 						</form>
-						<form hx-post="{{ row.MoveURL }}">
+						<form ypy-post="{{ row.MoveURL }}">
 							@csrf
 							<input type="hidden" name="direction" value="down">
 							{!! components.Button(components.ButtonProps{
@@ -71,7 +71,7 @@ type OrderData = tags.OrderPageData
 								Disabled: row.Last,
 							}) !!}
 						</form>
-						<form hx-post="{{ row.MoveURL }}">
+						<form ypy-post="{{ row.MoveURL }}">
 							@csrf
 							<input type="hidden" name="direction" value="end">
 							{!! components.Button(components.ButtonProps{
@@ -91,7 +91,7 @@ type OrderData = tags.OrderPageData
 		     several labels before it was ready: the identifiers go in the order
 		     they are read here, and the server writes one block of positions
 		     rather than one move per row. --}}
-		<form class="mt-8 border-t pt-6" hx-post="{{ .ReorderURL }}">
+		<form class="mt-8 border-t pt-6" ypy-post="{{ .ReorderURL }}">
 			@csrf
 			<input type="hidden" name="type" value="{{ .Taxonomy }}">
 			@foreach(.Rows as row)
