@@ -22,7 +22,7 @@ const (
 	// aruRelease is the CLI whose view compiler turns the markup into Go. It is
 	// the compiler, not the Go toolchain, that refuses an address composed
 	// behind text, so an older one passes views a current one refuses.
-	aruRelease = "v0.72.0"
+	aruRelease = "v0.88.0"
 	// skeletonRelease is the project the views are published into: its layout
 	// is the one every screen extends, and its go.mod is what an installer
 	// compiles against.

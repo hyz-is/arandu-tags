@@ -3,9 +3,9 @@ module github.com/hyz-is/arandu-tags
 go 1.26.10
 
 require (
-	github.com/arandu-io/framework v0.69.0
-	github.com/arandu-io/hesape v0.107.0
-	github.com/arandu-io/kyse v0.53.0
+	github.com/arandu-io/framework v0.71.0
+	github.com/arandu-io/hesape v0.109.0
+	github.com/arandu-io/kyse v0.53.1
 	modernc.org/sqlite v1.57.0
 )
 
